@@ -4,6 +4,7 @@ export type AuthUser = {
   username: string;
   email: string;
   role: "admin" | "user";
+  is_active?: boolean;
 };
 
 const TOKEN_KEY = "authToken";

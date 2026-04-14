@@ -2,6 +2,7 @@
 
 import { PwaClient } from "@/components/PwaClient";
 import {
+  Ban,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -31,7 +32,7 @@ import {
 import { useDebounce } from "@/lib/useDebounce";
 import { fetchCurrentUser, logout } from "@/lib/authApi";
 import { getAuthToken, setAuthToken, type AuthUser } from "@/lib/auth";
-import { createUser, listUsers, type AdminUserRow } from "@/lib/usersApi";
+import { createUser, deleteUser, listUsers, updateUser, type AdminUserRow } from "@/lib/usersApi";
 import { PatientAuditDetails } from "@/lib/patientAuditDetails";
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -278,6 +279,20 @@ export default function Home() {
     password: "",
     role: "user" as "user" | "admin",
   });
+
+  const [userEditing, setUserEditing] = useState<null | AdminUserRow>(null);
+  const [userEditForm, setUserEditForm] = useState({
+    name: "",
+    username: "",
+    email: "",
+    password: "",
+    role: "user" as "user" | "admin",
+    is_active: true,
+  });
+  const [userEditSaving, setUserEditSaving] = useState(false);
+
+  const [userDelete, setUserDelete] = useState<null | AdminUserRow>(null);
+  const [userDeleteSaving, setUserDeleteSaving] = useState(false);
 
   function showToast(kind: "success" | "error", message: string) {
     setToast({ kind, message });
@@ -586,12 +601,16 @@ export default function Home() {
     }
   }
 
+  async function reloadAdminUsers() {
+    const users = await listUsers();
+    setAdminUsers(users);
+  }
+
   async function openAdmin() {
     setAdminError(null);
     setAdminLoading(true);
     try {
-      const users = await listUsers();
-      setAdminUsers(users);
+      await reloadAdminUsers();
       setAdminOpen(true);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load users";
@@ -789,7 +808,7 @@ export default function Home() {
               onClick={() => setAdminOpen(false)}
               aria-label="Close"
             />
-            <div className="relative w-full max-w-3xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="relative w-full max-w-5xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                   Admin — Users
@@ -847,13 +866,13 @@ export default function Home() {
                           setAdminError(null);
                           setAdminLoading(true);
                           try {
-                            const created = await createUser({
+                            await createUser({
                               name: createUserForm.name.trim(),
                               username: createUserForm.username.trim(),
                               password: createUserForm.password,
                               role: createUserForm.role,
                             });
-                            setAdminUsers((p) => [...p, created]);
+                            await reloadAdminUsers();
                             setCreateUserForm({ name: "", username: "", password: "", role: "user" });
                             showToast("success", "User created.");
                           } catch (e) {
@@ -890,6 +909,10 @@ export default function Home() {
                             <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Username</th>
                             <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Name</th>
                             <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Role</th>
+                            <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Status</th>
+                            <th className="sticky top-0 bg-zinc-100 px-3 py-2 text-right dark:bg-zinc-800/60">
+                              Actions
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
@@ -902,6 +925,72 @@ export default function Home() {
                                   {u.role}
                                 </span>
                               </td>
+                              <td className="px-3 py-2">
+                                <span
+                                  className={`inline-flex rounded-md px-2 py-0.5 font-semibold ${
+                                    u.is_active
+                                      ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-100"
+                                      : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                                  }`}
+                                >
+                                  {u.is_active ? "Active" : "Disabled"}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={adminLoading}
+                                    onClick={() => {
+                                      setUserEditing(u);
+                                      setUserEditForm({
+                                        name: u.name,
+                                        username: u.username,
+                                        email: u.email ?? "",
+                                        password: "",
+                                        role: u.role,
+                                        is_active: Boolean(u.is_active),
+                                      });
+                                    }}
+                                    className="rounded-md p-1 transition-colors hover:bg-zinc-100 active:bg-zinc-200 disabled:opacity-60 dark:hover:bg-zinc-800 dark:active:bg-zinc-700"
+                                    title="Edit user"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={adminLoading || u.id === authUser.id}
+                                    onClick={async () => {
+                                      setAdminError(null);
+                                      setAdminLoading(true);
+                                      try {
+                                        await updateUser(u.id, { is_active: !u.is_active });
+                                        await reloadAdminUsers();
+                                        showToast("success", u.is_active ? "User disabled." : "User enabled.");
+                                      } catch (e) {
+                                        const msg = e instanceof Error ? e.message : "Update failed";
+                                        setAdminError(msg);
+                                        showToast("error", msg);
+                                      } finally {
+                                        setAdminLoading(false);
+                                      }
+                                    }}
+                                    className="rounded-md p-1 transition-colors hover:bg-zinc-100 active:bg-zinc-200 disabled:opacity-60 dark:hover:bg-zinc-800 dark:active:bg-zinc-700"
+                                    title={u.is_active ? "Disable user" : "Enable user"}
+                                  >
+                                    <Ban className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={adminLoading || u.id === authUser.id}
+                                    onClick={() => setUserDelete(u)}
+                                    className="rounded-md p-1 transition-colors hover:bg-zinc-100 active:bg-zinc-200 disabled:opacity-60 dark:hover:bg-zinc-800 dark:active:bg-zinc-700"
+                                    title="Delete user"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -913,6 +1002,225 @@ export default function Home() {
             </div>
           </div>
         ) : null}
+
+        {userEditing ? (
+          <div
+            className="fixed inset-0 z-60 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Edit user"
+          >
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setUserEditing(null)}
+              aria-label="Close"
+            />
+            <div className="relative w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Edit user</div>
+                <button
+                  type="button"
+                  onClick={() => setUserEditing(null)}
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:active:bg-zinc-800"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <div>
+                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Name</label>
+                  <input
+                    value={userEditForm.name}
+                    onChange={(e) => setUserEditForm((p) => ({ ...p, name: e.target.value }))}
+                    className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Username</label>
+                  <input
+                    value={userEditForm.username}
+                    onChange={(e) => setUserEditForm((p) => ({ ...p, username: e.target.value }))}
+                    className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Email (optional)</label>
+                  <input
+                    value={userEditForm.email}
+                    onChange={(e) => setUserEditForm((p) => ({ ...p, email: e.target.value }))}
+                    className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
+                    placeholder="Leave empty for no email"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">New password (optional)</label>
+                  <input
+                    value={userEditForm.password}
+                    onChange={(e) => setUserEditForm((p) => ({ ...p, password: e.target.value }))}
+                    type="password"
+                    className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
+                    placeholder="Leave empty to keep current password"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Role</label>
+                    <select
+                      value={userEditForm.role}
+                      onChange={(e) =>
+                        setUserEditForm((p) => ({ ...p, role: e.target.value as "user" | "admin" }))
+                      }
+                      disabled={userEditing.id === authUser.id && userEditing.role === "admin"}
+                      className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
+                    >
+                      <option value="user">user</option>
+                      <option value="admin">admin</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <label className="flex w-full items-center justify-between gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                      <span>Active</span>
+                      <input
+                        type="checkbox"
+                        checked={userEditForm.is_active}
+                        disabled={userEditing.id === authUser.id}
+                        onChange={(e) => setUserEditForm((p) => ({ ...p, is_active: e.target.checked }))}
+                        className="h-4 w-4 rounded border-zinc-300 text-slate-600 focus:ring-slate-500 dark:border-zinc-600 dark:bg-zinc-950"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setUserEditing(null)}
+                  className="flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900 dark:active:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={userEditSaving}
+                  onClick={async () => {
+                    if (!userEditing) return;
+                    if (userEditing.id === authUser.id && userEditForm.is_active === false) {
+                      showToast("error", "You cannot disable your own account.");
+                      return;
+                    }
+                    if (userEditing.id === authUser.id && userEditForm.role === "user" && userEditing.role === "admin") {
+                      showToast("error", "You cannot demote your own admin account here.");
+                      return;
+                    }
+
+                    setUserEditSaving(true);
+                    try {
+                      const nextEmail = userEditForm.email.trim();
+                      const payload: Parameters<typeof updateUser>[1] = {
+                        name: userEditForm.name.trim(),
+                        username: userEditForm.username.trim(),
+                        email: nextEmail ? nextEmail : null,
+                        role: userEditForm.role,
+                        is_active: userEditForm.is_active,
+                      };
+                      if (userEditForm.password.trim()) {
+                        payload.password = userEditForm.password.trim();
+                      }
+
+                      const sameName = payload.name === userEditing.name;
+                      const sameUsername = payload.username === userEditing.username;
+                      const sameEmail = (userEditing.email ?? "") === (payload.email ?? "");
+                      const sameRole = payload.role === userEditing.role;
+                      const sameActive = payload.is_active === Boolean(userEditing.is_active);
+                      const pwd = Boolean(userEditForm.password.trim());
+                      if (sameName && sameUsername && sameEmail && sameRole && sameActive && !pwd) {
+                        showToast("error", "No changes to save.");
+                        return;
+                      }
+
+                      await updateUser(userEditing.id, payload);
+                      await reloadAdminUsers();
+
+                      if (userEditing.id === authUser.id) {
+                        const u = await fetchCurrentUser();
+                        setAuthUser(u);
+                      }
+
+                      setUserEditing(null);
+                      showToast("success", "User updated.");
+                    } catch (e) {
+                      const msg = e instanceof Error ? e.message : "Update failed";
+                      showToast("error", msg);
+                    } finally {
+                      setUserEditSaving(false);
+                    }
+                  }}
+                  className="flex-1 rounded-xl bg-slate-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-700 active:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {userEditSaving ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {userDelete ? (
+          <div
+            className="fixed inset-0 z-60 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Confirm delete user"
+          >
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setUserDelete(null)}
+              aria-label="Close"
+            />
+            <div className="relative w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Delete user</div>
+              <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+                Are you sure you want to delete{" "}
+                <span className="font-semibold text-zinc-900 dark:text-zinc-50">{userDelete.username}</span>?
+              </div>
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setUserDelete(null)}
+                  className="flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900 dark:active:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={userDeleteSaving}
+                  onClick={async () => {
+                    if (!userDelete) return;
+                    setUserDeleteSaving(true);
+                    try {
+                      await deleteUser(userDelete.id);
+                      await reloadAdminUsers();
+                      setUserDelete(null);
+                      showToast("success", "User deleted.");
+                    } catch (e) {
+                      const msg = e instanceof Error ? e.message : "Delete failed";
+                      showToast("error", msg);
+                    } finally {
+                      setUserDeleteSaving(false);
+                    }
+                  }}
+                  className="flex-1 rounded-xl bg-red-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-red-700 active:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {userDeleteSaving ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {pendingEditing ? (
           <div
             className="fixed inset-0 z-60 flex items-center justify-center p-4"

@@ -1735,16 +1735,16 @@ export default function Home() {
             </div>
           </div>
         ) : null}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
               Surgical Dressing Log
             </h1>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {authUser ? (
-              <div className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="inline-flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <span className="font-semibold">{authUser.username}</span>
                 {authUser.role === "admin" ? (
                   <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-100">
@@ -1780,40 +1780,39 @@ export default function Home() {
                     <LogOut className="h-3.5 w-3.5" /> Logout
                   </span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = theme === "dark" ? "light" : "dark";
+                    setTheme(next);
+                    document.documentElement.classList.toggle("dark", next === "dark");
+                    localStorage.setItem("theme", next);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:active:bg-zinc-800 dark:focus-visible:ring-zinc-600 dark:focus-visible:ring-offset-zinc-950"
+                >
+                  {theme === "dark" ? (
+                    <>
+                      <Sun className="h-4 w-4" /> Light
+                    </>
+                  ) : (
+                    <>
+                      <Moon className="h-4 w-4" /> Dark
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void onExport()}
+                  disabled={!authUser}
+                  className="inline-flex items-center gap-2 rounded-lg bg-slate-600 px-2 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 active:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-600 dark:hover:bg-slate-500 dark:active:bg-slate-700 dark:focus-visible:ring-slate-500 dark:focus-visible:ring-offset-zinc-950"
+                >
+                  <Download className="h-4 w-4" />
+                  Export Excel
+                </button>
               </div>
             ) : null}
-
-            <button
-              type="button"
-              onClick={() => {
-                const next = theme === "dark" ? "light" : "dark";
-                setTheme(next);
-                // Apply immediately for responsive UX.
-                document.documentElement.classList.toggle("dark", next === "dark");
-                localStorage.setItem("theme", next);
-              }}
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:active:bg-zinc-800/80 dark:focus-visible:ring-zinc-600 dark:focus-visible:ring-offset-zinc-950"
-            >
-              {theme === "dark" ? (
-                <>
-                  <Sun className="h-4 w-4" /> Light
-                </>
-              ) : (
-                <>
-                  <Moon className="h-4 w-4" /> Dark
-                </>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => void onExport()}
-              disabled={!authUser}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-700 active:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-50 dark:bg-slate-600 dark:hover:bg-slate-500 dark:active:bg-slate-700 dark:focus-visible:ring-slate-500 dark:focus-visible:ring-offset-zinc-950"
-            >
-              <Download className="h-4 w-4" />
-              Export Excel
-            </button>
           </div>
         </div>
 

@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   createPatient,
   exportPatientsExcel,
@@ -28,8 +29,8 @@ import {
   type Sex,
 } from "@/lib/patientsApi";
 import { useDebounce } from "@/lib/useDebounce";
-import { login, logout } from "@/lib/authApi";
-import { getAuthToken, type AuthUser } from "@/lib/auth";
+import { fetchCurrentUser, logout } from "@/lib/authApi";
+import { getAuthToken, setAuthToken, type AuthUser } from "@/lib/auth";
 import { createUser, listUsers, type AdminUserRow } from "@/lib/usersApi";
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -191,6 +192,7 @@ function formatDayMonthWordYear(isoLike: string) {
 }
 
 export default function Home() {
+  const router = useRouter();
   // Fixed default on server + first client pass so SSR/static HTML matches hydration;
   // real preference is applied in useLayoutEffect (localStorage).
   const [theme, setTheme] = useState<"light" | "dark">("dark");
@@ -260,9 +262,7 @@ export default function Home() {
   }>({ key: "created_at", dir: "desc" });
 
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
-  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [loggingIn, setLoggingIn] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
 
   const [auditOpen, setAuditOpen] = useState<null | { patient: Patient; logs: PatientAuditLog[] }>(null);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -329,6 +329,29 @@ export default function Home() {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const token = getAuthToken();
+      if (!token) {
+        router.replace("/login");
+        return;
+      }
+      try {
+        const u = await fetchCurrentUser();
+        if (!cancelled) setAuthUser(u);
+      } catch {
+        setAuthToken(null);
+        if (!cancelled) router.replace("/login");
+      } finally {
+        if (!cancelled) setAuthReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
   const effectiveFilters = useMemo((): PatientFilters => {
     const completed = completeYmdRange(dateRange);
     if (activeFilter === "id") {
@@ -370,23 +393,25 @@ export default function Home() {
   }
 
   useEffect(() => {
-    if (!getAuthToken()) return;
+    if (!authReady || !getAuthToken()) return;
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveFilters.id_no, effectiveFilters.from_date, effectiveFilters.to_date, effectiveFilters.date]);
+  }, [authReady, effectiveFilters.id_no, effectiveFilters.from_date, effectiveFilters.to_date, effectiveFilters.date]);
 
   useEffect(() => {
     // When exiting filters UI, clear filters from the table view.
     if (filtersOpen) return;
+    if (!authReady || !getAuthToken()) return;
     setIdSearch("");
     setDateRange({ from_date: "", to_date: "" });
     setFiltersApplied(false);
     void refresh({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersOpen]);
+  }, [authReady, filtersOpen]);
 
   async function flushPendingCreates() {
     if (typeof window === "undefined") return;
+    if (!getAuthToken()) return;
     if (!navigator.onLine) return;
     const items = readPending();
     if (items.length === 0) return;
@@ -437,19 +462,21 @@ export default function Home() {
   }
 
   useEffect(() => {
+    if (!authReady || !getAuthToken()) return;
     setPendingCount(readPending().length);
     void flushPendingCreates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authReady]);
 
   useEffect(() => {
     function onOnline() {
+      if (!authReady || !getAuthToken()) return;
       void flushPendingCreates();
     }
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authReady]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -636,6 +663,7 @@ export default function Home() {
   }
 
   function setQuickRange(kind: "today" | "week" | "month") {
+    if (!authReady || !getAuthToken()) return;
     const t = todayYmd();
     const from = (() => {
       if (kind === "today") return t;
@@ -662,65 +690,22 @@ export default function Home() {
     showFilterNotice("Filter applied successfully.");
   }
 
+  if (!authReady || !authUser) {
+    return (
+      <div className="min-h-full flex-1 bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
+        <div className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center px-4 py-10 sm:px-6">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center text-sm text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+            Loading…
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-full flex-1 bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
       <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
         <PwaClient />
-
-        {!authUser ? (
-          <div className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="mb-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-              Sign in
-            </div>
-            <div className="text-xs text-zinc-600 dark:text-zinc-300">
-              Use your username and password.
-            </div>
-            {loginError ? (
-              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-900 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-100">
-                {loginError}
-              </div>
-            ) : null}
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <input
-                value={loginForm.username}
-                onChange={(e) => setLoginForm((p) => ({ ...p, username: e.target.value }))}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
-                placeholder="Username"
-                autoComplete="username"
-              />
-              <input
-                value={loginForm.password}
-                onChange={(e) => setLoginForm((p) => ({ ...p, password: e.target.value }))}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
-                placeholder="Password"
-                type="password"
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                disabled={loggingIn}
-                onClick={async () => {
-                  setLoginError(null);
-                  setLoggingIn(true);
-                  try {
-                    const u = await login(loginForm.username, loginForm.password);
-                    setAuthUser(u);
-                    await refresh();
-                    showToast("success", `Welcome ${u.username}`);
-                  } catch (e) {
-                    const msg = e instanceof Error ? e.message : "Login failed";
-                    setLoginError(msg);
-                  } finally {
-                    setLoggingIn(false);
-                  }
-                }}
-                className="rounded-xl bg-slate-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-700 active:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loggingIn ? "Signing in..." : "Sign in"}
-              </button>
-            </div>
-          </div>
-        ) : null}
 
         {auditOpen ? (
           <div
@@ -1476,6 +1461,7 @@ export default function Home() {
                     setAuthUser(null);
                     setPatients([]);
                     setTotalPatients(null);
+                    router.replace("/login");
                   }}
                   className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:active:bg-zinc-800"
                   title="Logout"

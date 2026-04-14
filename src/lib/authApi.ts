@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "./config";
 import { setAuthToken, type AuthUser } from "./auth";
+import { apiFetch } from "./http";
 
 export async function login(username: string, password: string) {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
@@ -19,21 +20,17 @@ export async function login(username: string, password: string) {
 }
 
 export async function logout() {
-  // Best-effort: server logout requires token; local cleanup always happens.
-  const token = (() => {
-    try {
-      return localStorage.getItem("authToken");
-    } catch {
-      return null;
-    }
-  })();
-
-  if (token) {
-    await fetch(`${API_BASE_URL}/auth/logout`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    }).catch(() => undefined);
-  }
+  await apiFetch(`${API_BASE_URL}/auth/logout`, { method: "POST" }).catch(() => undefined);
   setAuthToken(null);
+}
+
+export async function fetchCurrentUser(): Promise<AuthUser> {
+  const res = await apiFetch(`${API_BASE_URL}/auth/me`, { cache: "no-store" });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Request failed (${res.status})`);
+  }
+  const json = (await res.json()) as { user: AuthUser };
+  return json.user;
 }
 

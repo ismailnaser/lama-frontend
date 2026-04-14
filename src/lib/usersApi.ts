@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "./config";
 import { apiFetch } from "./http";
+import { humanizeApiErrorText } from "./apiErrors";
 
 export type AdminUserRow = {
   id: number;
@@ -14,7 +15,7 @@ export async function listUsers() {
   const res = await apiFetch(`${API_BASE_URL}/users`, { cache: "no-store" });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(text || `Request failed (${res.status})`);
+    throw new Error(humanizeApiErrorText(text, `Request failed (${res.status})`));
   }
   const json = (await res.json()) as { data: AdminUserRow[] };
   return json.data;
@@ -34,7 +35,7 @@ export async function createUser(input: {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(text || `Request failed (${res.status})`);
+    throw new Error(humanizeApiErrorText(text, `Request failed (${res.status})`));
   }
   const json = (await res.json()) as { data: AdminUserRow };
   return json.data;

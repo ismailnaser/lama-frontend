@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "./config";
 import { apiFetch } from "./http";
+import { humanizeApiErrorText } from "./apiErrors";
 
 export type Sex = "M" | "F";
 
@@ -24,16 +25,7 @@ export type PatientFilters = {
 };
 
 function errorMessageFromResponseBody(text: string, fallback: string): string {
-  const t = text.trim();
-  if (t.startsWith("{")) {
-    try {
-      const j = JSON.parse(t) as { message?: string };
-      if (j.message && typeof j.message === "string") return j.message;
-    } catch {
-      /* ignore */
-    }
-  }
-  return t || fallback;
+  return humanizeApiErrorText(text, fallback);
 }
 
 function toQueryString(filters: PatientFilters) {

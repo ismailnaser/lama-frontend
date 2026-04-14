@@ -32,6 +32,7 @@ import { useDebounce } from "@/lib/useDebounce";
 import { fetchCurrentUser, logout } from "@/lib/authApi";
 import { getAuthToken, setAuthToken, type AuthUser } from "@/lib/auth";
 import { createUser, listUsers, type AdminUserRow } from "@/lib/usersApi";
+import { PatientAuditDetails } from "@/lib/patientAuditDetails";
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -720,7 +721,7 @@ export default function Home() {
               onClick={() => setAuditOpen(null)}
               aria-label="Close"
             />
-            <div className="relative w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="relative w-full max-w-3xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                   Audit log — ID {auditOpen.patient.id_no}
@@ -759,10 +760,10 @@ export default function Home() {
                               {l.action}
                             </span>
                           </td>
-                          <td className="px-3 py-2">
-                            <pre className="whitespace-pre-wrap break-words rounded-lg bg-zinc-50 p-2 text-[11px] text-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                              {JSON.stringify(l.changes, null, 2)}
-                            </pre>
+                          <td className="px-3 py-2 align-top">
+                            <div className="rounded-lg bg-zinc-50 p-2 dark:bg-zinc-950">
+                              <PatientAuditDetails log={l} />
+                            </div>
                           </td>
                         </tr>
                       ))}

@@ -1,6 +1,7 @@
 import { API_BASE_URL } from "./config";
 import { setAuthToken, type AuthUser } from "./auth";
 import { apiFetch } from "./http";
+import { humanizeApiErrorText } from "./apiErrors";
 
 export async function login(username: string, password: string) {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
@@ -11,7 +12,7 @@ export async function login(username: string, password: string) {
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(text || `Login failed (${res.status})`);
+    throw new Error(humanizeApiErrorText(text, `Login failed (${res.status})`));
   }
 
   const json = (await res.json()) as { token: string; user: AuthUser };
@@ -28,7 +29,7 @@ export async function fetchCurrentUser(): Promise<AuthUser> {
   const res = await apiFetch(`${API_BASE_URL}/auth/me`, { cache: "no-store" });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(text || `Request failed (${res.status})`);
+    throw new Error(humanizeApiErrorText(text, `Request failed (${res.status})`));
   }
   const json = (await res.json()) as { user: AuthUser };
   return json.user;

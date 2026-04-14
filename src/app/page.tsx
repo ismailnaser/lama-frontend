@@ -5,8 +5,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  LogOut,
   Moon,
+  Plus,
   Pencil,
+  Shield,
   Sun,
   Trash2,
 } from "lucide-react";
@@ -15,14 +18,19 @@ import {
   createPatient,
   exportPatientsExcel,
   getPatientsCount,
+  getPatientAudits,
   listPatients,
   deletePatient,
   updatePatient,
   type Patient,
   type PatientFilters,
+  type PatientAuditLog,
   type Sex,
 } from "@/lib/patientsApi";
 import { useDebounce } from "@/lib/useDebounce";
+import { login, logout } from "@/lib/authApi";
+import { getAuthToken, type AuthUser } from "@/lib/auth";
+import { createUser, listUsers, type AdminUserRow } from "@/lib/usersApi";
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -251,6 +259,25 @@ export default function Home() {
     dir: "asc" | "desc";
   }>({ key: "created_at", dir: "desc" });
 
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loggingIn, setLoggingIn] = useState(false);
+
+  const [auditOpen, setAuditOpen] = useState<null | { patient: Patient; logs: PatientAuditLog[] }>(null);
+  const [auditLoading, setAuditLoading] = useState(false);
+
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [adminUsers, setAdminUsers] = useState<AdminUserRow[]>([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState<string | null>(null);
+  const [createUserForm, setCreateUserForm] = useState({
+    name: "",
+    username: "",
+    password: "",
+    role: "user" as "user" | "admin",
+  });
+
   function showToast(kind: "success" | "error", message: string) {
     setToast({ kind, message });
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
@@ -343,6 +370,7 @@ export default function Home() {
   }
 
   useEffect(() => {
+    if (!getAuthToken()) return;
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveFilters.id_no, effectiveFilters.from_date, effectiveFilters.to_date, effectiveFilters.date]);
@@ -516,6 +544,35 @@ export default function Home() {
     }
   }
 
+  async function openAudits(patient: Patient) {
+    setAuditLoading(true);
+    try {
+      const logs = await getPatientAudits(patient.id);
+      setAuditOpen({ patient, logs });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to load audit log";
+      showToast("error", msg);
+    } finally {
+      setAuditLoading(false);
+    }
+  }
+
+  async function openAdmin() {
+    setAdminError(null);
+    setAdminLoading(true);
+    try {
+      const users = await listUsers();
+      setAdminUsers(users);
+      setAdminOpen(true);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to load users";
+      setAdminError(msg);
+      showToast("error", msg);
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
   async function onExport() {
     setError(null);
     try {
@@ -609,6 +666,266 @@ export default function Home() {
     <div className="min-h-full flex-1 bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
       <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
         <PwaClient />
+
+        {!authUser ? (
+          <div className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="mb-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              Sign in
+            </div>
+            <div className="text-xs text-zinc-600 dark:text-zinc-300">
+              Use your username and password.
+            </div>
+            {loginError ? (
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-900 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-100">
+                {loginError}
+              </div>
+            ) : null}
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <input
+                value={loginForm.username}
+                onChange={(e) => setLoginForm((p) => ({ ...p, username: e.target.value }))}
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
+                placeholder="Username"
+                autoComplete="username"
+              />
+              <input
+                value={loginForm.password}
+                onChange={(e) => setLoginForm((p) => ({ ...p, password: e.target.value }))}
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
+                placeholder="Password"
+                type="password"
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                disabled={loggingIn}
+                onClick={async () => {
+                  setLoginError(null);
+                  setLoggingIn(true);
+                  try {
+                    const u = await login(loginForm.username, loginForm.password);
+                    setAuthUser(u);
+                    await refresh();
+                    showToast("success", `Welcome ${u.username}`);
+                  } catch (e) {
+                    const msg = e instanceof Error ? e.message : "Login failed";
+                    setLoginError(msg);
+                  } finally {
+                    setLoggingIn(false);
+                  }
+                }}
+                className="rounded-xl bg-slate-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-700 active:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loggingIn ? "Signing in..." : "Sign in"}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {auditOpen ? (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Patient audit log"
+          >
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setAuditOpen(null)}
+              aria-label="Close"
+            />
+            <div className="relative w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                  Audit log — ID {auditOpen.patient.id_no}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAuditOpen(null)}
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:active:bg-zinc-800"
+                >
+                  Close
+                </button>
+              </div>
+
+              {auditOpen.logs.length === 0 ? (
+                <div className="text-sm text-zinc-600 dark:text-zinc-300">No audit entries.</div>
+              ) : (
+                <div className="max-h-[60vh] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+                  <table className="w-full border-separate border-spacing-0 text-xs">
+                    <thead>
+                      <tr className="text-left font-semibold text-zinc-700 dark:text-zinc-200">
+                        <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">When</th>
+                        <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">User</th>
+                        <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Action</th>
+                        <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {auditOpen.logs.map((l) => (
+                        <tr key={l.id} className="border-t border-zinc-200 dark:border-zinc-800">
+                          <td className="px-3 py-2 tabular-nums text-zinc-600 dark:text-zinc-300">
+                            {new Date(l.created_at).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2">{l.username ?? "—"}</td>
+                          <td className="px-3 py-2">
+                            <span className="inline-flex rounded-md bg-zinc-100 px-2 py-0.5 font-semibold text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100">
+                              {l.action}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <pre className="whitespace-pre-wrap break-words rounded-lg bg-zinc-50 p-2 text-[11px] text-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                              {JSON.stringify(l.changes, null, 2)}
+                            </pre>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {adminOpen ? (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Admin user management"
+          >
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setAdminOpen(false)}
+              aria-label="Close"
+            />
+            <div className="relative w-full max-w-3xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                  Admin — Users
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAdminOpen(false)}
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:active:bg-zinc-800"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-5">
+                <div className="lg:col-span-2">
+                  <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+                    <div className="mb-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+                      Create user
+                    </div>
+                    <div className="space-y-2">
+                      <input
+                        value={createUserForm.name}
+                        onChange={(e) => setCreateUserForm((p) => ({ ...p, name: e.target.value }))}
+                        className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
+                        placeholder="Name"
+                      />
+                      <input
+                        value={createUserForm.username}
+                        onChange={(e) => setCreateUserForm((p) => ({ ...p, username: e.target.value }))}
+                        className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
+                        placeholder="Username"
+                      />
+                      <input
+                        value={createUserForm.password}
+                        onChange={(e) => setCreateUserForm((p) => ({ ...p, password: e.target.value }))}
+                        className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
+                        placeholder="Password"
+                        type="password"
+                      />
+                      <select
+                        value={createUserForm.role}
+                        onChange={(e) =>
+                          setCreateUserForm((p) => ({ ...p, role: e.target.value as "user" | "admin" }))
+                        }
+                        className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
+                      >
+                        <option value="user">user</option>
+                        <option value="admin">admin</option>
+                      </select>
+
+                      <button
+                        type="button"
+                        disabled={adminLoading}
+                        onClick={async () => {
+                          setAdminError(null);
+                          setAdminLoading(true);
+                          try {
+                            const created = await createUser({
+                              name: createUserForm.name.trim(),
+                              username: createUserForm.username.trim(),
+                              password: createUserForm.password,
+                              role: createUserForm.role,
+                            });
+                            setAdminUsers((p) => [...p, created]);
+                            setCreateUserForm({ name: "", username: "", password: "", role: "user" });
+                            showToast("success", "User created.");
+                          } catch (e) {
+                            const msg = e instanceof Error ? e.message : "Create failed";
+                            setAdminError(msg);
+                            showToast("error", msg);
+                          } finally {
+                            setAdminLoading(false);
+                          }
+                        }}
+                        className="w-full rounded-xl bg-slate-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-700 active:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {adminLoading ? "Working..." : "Create"}
+                      </button>
+
+                      {adminError ? (
+                        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-900 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-100">
+                          {adminError}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="lg:col-span-3">
+                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800">
+                    <div className="border-b border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">
+                      Users ({adminUsers.length})
+                    </div>
+                    <div className="max-h-[55vh] overflow-auto">
+                      <table className="w-full border-separate border-spacing-0 text-xs">
+                        <thead>
+                          <tr className="text-left font-semibold text-zinc-600 dark:text-zinc-300">
+                            <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Username</th>
+                            <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Name</th>
+                            <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Role</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {adminUsers.map((u) => (
+                            <tr key={u.id} className="border-t border-zinc-200 dark:border-zinc-800">
+                              <td className="px-3 py-2 font-semibold">{u.username}</td>
+                              <td className="px-3 py-2">{u.name}</td>
+                              <td className="px-3 py-2">
+                                <span className="inline-flex rounded-md bg-zinc-100 px-2 py-0.5 font-semibold text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100">
+                                  {u.role}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {pendingEditing ? (
           <div
             className="fixed inset-0 z-60 flex items-center justify-center p-4"
@@ -1131,6 +1448,45 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-2">
+            {authUser ? (
+              <div className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <span className="font-semibold">{authUser.username}</span>
+                {authUser.role === "admin" ? (
+                  <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-100">
+                    <Shield className="h-3 w-3" /> admin
+                  </span>
+                ) : null}
+                {authUser.role === "admin" ? (
+                  <button
+                    type="button"
+                    onClick={() => void openAdmin()}
+                    disabled={adminLoading}
+                    className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:active:bg-zinc-800"
+                    title="Manage users"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      <Plus className="h-3.5 w-3.5" /> Users
+                    </span>
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await logout();
+                    setAuthUser(null);
+                    setPatients([]);
+                    setTotalPatients(null);
+                  }}
+                  className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:active:bg-zinc-800"
+                  title="Logout"
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <LogOut className="h-3.5 w-3.5" /> Logout
+                  </span>
+                </button>
+              </div>
+            ) : null}
+
             <button
               type="button"
               onClick={() => {
@@ -1156,6 +1512,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => void onExport()}
+              disabled={!authUser}
               className="inline-flex items-center gap-2 rounded-xl bg-slate-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-700 active:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-50 dark:bg-slate-600 dark:hover:bg-slate-500 dark:active:bg-slate-700 dark:focus-visible:ring-slate-500 dark:focus-visible:ring-offset-zinc-950"
             >
               <Download className="h-4 w-4" />
@@ -1622,6 +1979,15 @@ export default function Home() {
                           </td>
                           <td className="w-[84px] px-2 py-2 align-top sm:w-[104px] sm:px-4 sm:py-3 border-r border-zinc-200 dark:border-zinc-800">
                             <div className="flex justify-end gap-2 whitespace-nowrap text-zinc-700 dark:text-zinc-200">
+                              <button
+                                type="button"
+                                disabled={!authUser || auditLoading}
+                                onClick={() => void openAudits(p)}
+                                title="Audit log"
+                                className="rounded-md p-1 transition-colors hover:bg-zinc-100 active:bg-zinc-200 disabled:opacity-60 dark:hover:bg-zinc-800 dark:active:bg-zinc-700"
+                              >
+                                📜
+                              </button>
                               <button
                                 type="button"
                                 onClick={async () => {

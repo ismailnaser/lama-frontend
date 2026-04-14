@@ -573,6 +573,7 @@ export default function Home() {
   }
 
   async function openAudits(patient: Patient) {
+    if (authUser?.role !== "admin") return;
     setAuditLoading(true);
     try {
       const logs = await getPatientAudits(patient.id);
@@ -1966,15 +1967,17 @@ export default function Home() {
                           </td>
                           <td className="w-[84px] px-2 py-2 align-top sm:w-[104px] sm:px-4 sm:py-3 border-r border-zinc-200 dark:border-zinc-800">
                             <div className="flex justify-end gap-2 whitespace-nowrap text-zinc-700 dark:text-zinc-200">
-                              <button
-                                type="button"
-                                disabled={!authUser || auditLoading}
-                                onClick={() => void openAudits(p)}
-                                title="Audit log"
-                                className="rounded-md p-1 transition-colors hover:bg-zinc-100 active:bg-zinc-200 disabled:opacity-60 dark:hover:bg-zinc-800 dark:active:bg-zinc-700"
-                              >
-                                📜
-                              </button>
+                              {authUser.role === "admin" ? (
+                                <button
+                                  type="button"
+                                  disabled={auditLoading}
+                                  onClick={() => void openAudits(p)}
+                                  title="Audit log (admin only)"
+                                  className="rounded-md p-1 transition-colors hover:bg-zinc-100 active:bg-zinc-200 disabled:opacity-60 dark:hover:bg-zinc-800 dark:active:bg-zinc-700"
+                                >
+                                  📜
+                                </button>
+                              ) : null}
                               <button
                                 type="button"
                                 onClick={async () => {

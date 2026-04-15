@@ -118,6 +118,7 @@ type PendingCreate = {
     id_no: string;
     sex: Sex;
     age: number;
+    room: "room1" | "room2";
     ww: boolean;
     lab: boolean;
     burn: boolean;
@@ -135,6 +136,7 @@ function normalizePendingPayload(
   const id_no = String(o.id_no ?? "");
   const sex = (o.sex === "F" ? "F" : "M") as Sex;
   const age = typeof o.age === "number" ? o.age : Number(o.age);
+  const roomRaw = o.room;
   const wwRaw = o.ww;
   const labRaw = o.lab;
   const burnRaw = o.burn;
@@ -142,6 +144,7 @@ function normalizePendingPayload(
   let ww = false;
   let lab = false;
   let burn = false;
+  let room: "room1" | "room2" = "room1";
   let notes = "";
   if (typeof wwRaw === "boolean") {
     ww = wwRaw;
@@ -160,8 +163,12 @@ function normalizePendingPayload(
     const s = burnRaw.trim().toLowerCase();
     if (s === "1" || s === "true" || s === "yes") burn = true;
   }
+  if (typeof roomRaw === "string") {
+    const s = roomRaw.trim().toLowerCase();
+    if (s === "room1" || s === "room2") room = s as "room1" | "room2";
+  }
   if (typeof notesRaw === "string" && notesRaw.trim()) notes = notesRaw.trim();
-  return { id_no, sex, age: Number.isFinite(age) ? age : 0, ww, lab, burn, notes };
+  return { id_no, sex, age: Number.isFinite(age) ? age : 0, room, ww, lab, burn, notes };
 }
 
 function readPending(): PendingCreate[] {
@@ -226,6 +233,7 @@ export default function Home() {
     id_no: string;
     sex: Sex;
     age: string;
+    room: "room1" | "room2";
     ww: boolean;
     lab: boolean;
     burn: boolean;
@@ -240,6 +248,7 @@ export default function Home() {
     id_no: "",
     sex: "M" as Sex,
     age: "",
+    room: "room1" as "room1" | "room2",
     ww: false,
     lab: false,
     burn: false,
@@ -272,6 +281,7 @@ export default function Home() {
     id_no: string;
     sex: Sex;
     age: string;
+    room: "room1" | "room2";
     ww: boolean;
     lab: boolean;
     burn: boolean;
@@ -281,7 +291,7 @@ export default function Home() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const [sort, setSort] = useState<{
-    key: "id_no" | "sex" | "age" | "created_at" | "ww" | "lab" | "burn" | "notes";
+    key: "id_no" | "sex" | "age" | "room" | "created_at" | "ww" | "lab" | "burn" | "notes";
     dir: "asc" | "desc";
   }>({ key: "created_at", dir: "desc" });
 
@@ -558,6 +568,7 @@ export default function Home() {
         id_no: idNo,
         sex: form.sex,
         age: ageNum,
+        room: form.room,
         ww: form.ww,
         lab: form.lab,
         burn: form.burn,
@@ -571,7 +582,16 @@ export default function Home() {
         ];
         writePending(next);
         setPendingCount(next.length);
-        setForm((p) => ({ ...p, id_no: "", age: "", ww: false, lab: false, burn: false, notes: "" }));
+        setForm((p) => ({
+          ...p,
+          id_no: "",
+          age: "",
+          room: "room1",
+          ww: false,
+          lab: false,
+          burn: false,
+          notes: "",
+        }));
         showToast("success", "Saved offline. Will sync when online.");
         return;
       }
@@ -581,6 +601,7 @@ export default function Home() {
           id_no: payload.id_no,
           sex: payload.sex,
           age: payload.age,
+          room: payload.room,
           ww: payload.ww,
           lab: payload.lab,
           burn: payload.burn,
@@ -595,13 +616,31 @@ export default function Home() {
           ];
           writePending(next);
           setPendingCount(next.length);
-          setForm((p) => ({ ...p, id_no: "", age: "", ww: false, lab: false, burn: false, notes: "" }));
+          setForm((p) => ({
+            ...p,
+            id_no: "",
+            age: "",
+            room: "room1",
+            ww: false,
+            lab: false,
+            burn: false,
+            notes: "",
+          }));
           showToast("success", "Saved offline. Will sync when online.");
           return;
         }
         throw e;
       }
-      setForm((p) => ({ ...p, id_no: "", age: "", ww: false, lab: false, burn: false, notes: "" }));
+      setForm((p) => ({
+        ...p,
+        id_no: "",
+        age: "",
+        room: "room1",
+        ww: false,
+        lab: false,
+        burn: false,
+        notes: "",
+      }));
       await refresh();
       showToast("success", "Patient saved successfully.");
     } catch (err) {
@@ -1319,6 +1358,22 @@ export default function Home() {
                     <option value="F">F</option>
                   </select>
                 </div>
+                <div>
+                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Room</label>
+                  <select
+                    value={pendingEditing.room}
+                    onChange={(e) =>
+                      setPendingEditing((p) =>
+                        p ? { ...p, room: e.target.value as "room1" | "room2" } : p
+                      )
+                    }
+                    aria-label="Room"
+                    className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
+                  >
+                    <option value="room1">room1</option>
+                    <option value="room2">room2</option>
+                  </select>
+                </div>
               </div>
 
               <div className="mt-3 flex items-center gap-2">
@@ -1420,6 +1475,7 @@ export default function Home() {
                                 id_no: idNo,
                                 sex: pendingEditing.sex,
                                 age: ageNum,
+                                room: pendingEditing.room,
                                 ww: pendingEditing.ww,
                                 lab: pendingEditing.lab,
                                 burn: pendingEditing.burn,
@@ -1506,6 +1562,7 @@ export default function Home() {
                         <th className="bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">ID No</th>
                         <th className="bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Sex</th>
                         <th className="bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Age</th>
+                      <th className="bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Room</th>
                         <th className="bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">WW</th>
                         <th className="bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Lab</th>
                         <th className="bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Burn</th>
@@ -1525,6 +1582,7 @@ export default function Home() {
                           <td className="px-3 py-2 font-medium">{it.payload.id_no}</td>
                           <td className="px-3 py-2">{it.payload.sex}</td>
                           <td className="px-3 py-2">{it.payload.age}</td>
+                        <td className="px-3 py-2">{it.payload.room}</td>
                           <td className="px-3 py-2">
                             <WarBoolCell value={it.payload.ww} />
                           </td>
@@ -1548,6 +1606,7 @@ export default function Home() {
                                     id_no: it.payload.id_no,
                                     sex: it.payload.sex,
                                     age: String(it.payload.age),
+                                    room: it.payload.room,
                                     ww: it.payload.ww,
                                     lab: it.payload.lab,
                                     burn: it.payload.burn,
@@ -1647,6 +1706,22 @@ export default function Home() {
                     <option value="F">F</option>
                   </select>
                 </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    Room
+                  </label>
+                  <select
+                    value={editing.room}
+                    onChange={(e) =>
+                      setEditing((p) => (p ? { ...p, room: e.target.value as "room1" | "room2" } : p))
+                    }
+                    className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
+                    title="Room"
+                  >
+                    <option value="room1">room1</option>
+                    <option value="room2">room2</option>
+                  </select>
+                </div>
               </div>
 
               <div className="mt-3 flex items-center gap-2">
@@ -1736,6 +1811,7 @@ export default function Home() {
                         id_no: idNo,
                         sex: editing.sex,
                         age: ageNum,
+                        room: editing.room,
                         ww: editing.ww,
                         lab: editing.lab,
                         burn: editing.burn,
@@ -1955,6 +2031,20 @@ export default function Home() {
                     >
                       <option value="M">M</option>
                       <option value="F">F</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                      Room
+                    </label>
+                    <select
+                      value={form.room}
+                      onChange={(e) => setForm((p) => ({ ...p, room: e.target.value as "room1" | "room2" }))}
+                      className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
+                      title="Room"
+                    >
+                      <option value="room1">room1</option>
+                      <option value="room2">room2</option>
                     </select>
                   </div>
                 </div>
@@ -2327,6 +2417,16 @@ export default function Home() {
                           Age <span className="text-zinc-400">⇅</span>
                         </button>
                       </th>
+                      <th className="sticky top-0 w-[92px] bg-zinc-100 px-2 py-2 dark:bg-zinc-800/60 sm:px-4 sm:py-3 border-r border-zinc-200 dark:border-zinc-800">
+                        <button
+                          type="button"
+                          onClick={() => toggleSort("room")}
+                          className="inline-flex items-center gap-1"
+                          title="Room"
+                        >
+                          Room <span className="text-zinc-400">⇅</span>
+                        </button>
+                      </th>
                       <th className="sticky top-0 w-[72px] bg-zinc-100 px-2 py-2 dark:bg-zinc-800/60 sm:w-[80px] sm:px-4 sm:py-3 border-r border-zinc-200 dark:border-zinc-800">
                         <button
                           type="button"
@@ -2402,6 +2502,11 @@ export default function Home() {
                           <td className="px-2 py-2 align-top sm:px-4 sm:py-3 border-r border-zinc-200 dark:border-zinc-800">
                             {p.age}
                           </td>
+                          <td className="w-[92px] px-2 py-2 align-top sm:px-4 sm:py-3 border-r border-zinc-200 dark:border-zinc-800">
+                            <span className="inline-flex rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100">
+                              {p.room ?? "—"}
+                            </span>
+                          </td>
                           <td className="w-[72px] px-2 py-2 align-top sm:w-[80px] sm:px-4 sm:py-3 border-r border-zinc-200 dark:border-zinc-800">
                             <WarBoolCell value={Boolean(p.ww)} />
                           </td>
@@ -2435,6 +2540,7 @@ export default function Home() {
                                     id_no: p.id_no ?? "",
                                     sex: p.sex,
                                     age: String(p.age ?? ""),
+                                    room: (p.room ?? "room1") as "room1" | "room2",
                                     ww: Boolean(p.ww),
                                     lab: Boolean(p.lab),
                                     burn: Boolean(p.burn),

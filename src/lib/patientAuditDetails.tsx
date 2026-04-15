@@ -4,6 +4,7 @@ type PatientSnapshot = {
   id_no?: unknown;
   sex?: unknown;
   age?: unknown;
+  room?: unknown;
   ww?: unknown;
   lab?: unknown;
   burn?: unknown;
@@ -48,6 +49,11 @@ function fmtAge(v: unknown): string {
   return "—";
 }
 
+function fmtRoom(v: unknown): string {
+  const t = typeof v === "string" ? v.trim() : v === null || v === undefined ? "" : String(v);
+  return t ? t : "—";
+}
+
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-2">
@@ -90,6 +96,7 @@ export function PatientAuditDetails({ log }: { log: PatientAuditLog }) {
         <Row label="ID No" value={fmtIdNo(after.id_no)} />
         <Row label="Sex" value={fmtSex(after.sex)} />
         <Row label="Age" value={fmtAge(after.age)} />
+        <Row label="Room" value={fmtRoom(after.room)} />
         <Row label="WW" value={fmtBool(after.ww)} />
         <Row label="Lab" value={fmtBool(after.lab)} />
         <Row label="Burn" value={fmtBool(after.burn)} />
@@ -106,6 +113,7 @@ export function PatientAuditDetails({ log }: { log: PatientAuditLog }) {
         <Row label="ID No" value={fmtIdNo(before.id_no)} />
         <Row label="Sex" value={fmtSex(before.sex)} />
         <Row label="Age" value={fmtAge(before.age)} />
+        <Row label="Room" value={fmtRoom(before.room)} />
         <Row label="WW" value={fmtBool(before.ww)} />
         <Row label="Lab" value={fmtBool(before.lab)} />
         <Row label="Burn" value={fmtBool(before.burn)} />
@@ -117,11 +125,12 @@ export function PatientAuditDetails({ log }: { log: PatientAuditLog }) {
   if (log.action === "updated") {
     if (!before || !after) return <div className="text-[11px] text-zinc-600 dark:text-zinc-300">No details.</div>;
 
-    const keys: Array<keyof PatientSnapshot> = ["id_no", "sex", "age", "ww", "lab", "burn", "notes"];
+    const keys: Array<keyof PatientSnapshot> = ["id_no", "sex", "age", "room", "ww", "lab", "burn", "notes"];
     const labels: Record<keyof PatientSnapshot, string> = {
       id_no: "ID No",
       sex: "Sex",
       age: "Age",
+      room: "Room",
       ww: "WW",
       lab: "Lab",
       burn: "Burn",
@@ -132,6 +141,7 @@ export function PatientAuditDetails({ log }: { log: PatientAuditLog }) {
       id_no: fmtIdNo,
       sex: fmtSex,
       age: fmtAge,
+      room: fmtRoom,
       ww: fmtBool,
       lab: fmtBool,
       burn: fmtBool,

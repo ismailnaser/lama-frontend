@@ -9,6 +9,7 @@ export type Patient = {
   id_no: string;
   sex: Sex;
   age: number;
+  room: "room1" | "room2" | null;
   ww: boolean;
   lab: boolean;
   burn: boolean;
@@ -57,6 +58,7 @@ export async function createPatient(input: {
   id_no: string;
   sex: Sex;
   age: number;
+  room: "room1" | "room2";
   ww?: boolean;
   lab?: boolean;
   burn?: boolean;
@@ -69,6 +71,7 @@ export async function createPatient(input: {
       id_no: input.id_no,
       sex: input.sex,
       age: input.age,
+      room: input.room,
       ww: input.ww ?? false,
       lab: input.lab ?? false,
       burn: input.burn ?? false,
@@ -111,6 +114,7 @@ export async function updatePatient(
     id_no: string;
     sex: Sex;
     age: number;
+    room: "room1" | "room2";
     ww: boolean;
     lab: boolean;
     burn: boolean;

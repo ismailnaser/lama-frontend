@@ -10,6 +10,8 @@ export type Patient = {
   sex: Sex;
   age: number;
   ww: boolean;
+  lab: boolean;
+  burn: boolean;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -56,6 +58,8 @@ export async function createPatient(input: {
   sex: Sex;
   age: number;
   ww?: boolean;
+  lab?: boolean;
+  burn?: boolean;
   notes?: string | null;
 }) {
   const res = await apiFetch(`${API_BASE_URL}/patients`, {
@@ -66,6 +70,8 @@ export async function createPatient(input: {
       sex: input.sex,
       age: input.age,
       ww: input.ww ?? false,
+      lab: input.lab ?? false,
+      burn: input.burn ?? false,
       notes: input.notes?.trim() ? input.notes.trim() : null,
     }),
   });
@@ -106,6 +112,8 @@ export async function updatePatient(
     sex: Sex;
     age: number;
     ww: boolean;
+    lab: boolean;
+    burn: boolean;
     notes: string | null;
   }>
 ) {

@@ -5,6 +5,8 @@ type PatientSnapshot = {
   sex?: unknown;
   age?: unknown;
   ww?: unknown;
+  lab?: unknown;
+  burn?: unknown;
   notes?: unknown;
 };
 
@@ -89,6 +91,8 @@ export function PatientAuditDetails({ log }: { log: PatientAuditLog }) {
         <Row label="Sex" value={fmtSex(after.sex)} />
         <Row label="Age" value={fmtAge(after.age)} />
         <Row label="WW" value={fmtBool(after.ww)} />
+        <Row label="Lab" value={fmtBool(after.lab)} />
+        <Row label="Burn" value={fmtBool(after.burn)} />
         <Row label="Notes" value={fmtNotes(after.notes)} />
       </div>
     );
@@ -103,6 +107,8 @@ export function PatientAuditDetails({ log }: { log: PatientAuditLog }) {
         <Row label="Sex" value={fmtSex(before.sex)} />
         <Row label="Age" value={fmtAge(before.age)} />
         <Row label="WW" value={fmtBool(before.ww)} />
+        <Row label="Lab" value={fmtBool(before.lab)} />
+        <Row label="Burn" value={fmtBool(before.burn)} />
         <Row label="Notes" value={fmtNotes(before.notes)} />
       </div>
     );
@@ -111,12 +117,14 @@ export function PatientAuditDetails({ log }: { log: PatientAuditLog }) {
   if (log.action === "updated") {
     if (!before || !after) return <div className="text-[11px] text-zinc-600 dark:text-zinc-300">No details.</div>;
 
-    const keys: Array<keyof PatientSnapshot> = ["id_no", "sex", "age", "ww", "notes"];
+    const keys: Array<keyof PatientSnapshot> = ["id_no", "sex", "age", "ww", "lab", "burn", "notes"];
     const labels: Record<keyof PatientSnapshot, string> = {
       id_no: "ID No",
       sex: "Sex",
       age: "Age",
       ww: "WW",
+      lab: "Lab",
+      burn: "Burn",
       notes: "Notes",
     };
 
@@ -125,6 +133,8 @@ export function PatientAuditDetails({ log }: { log: PatientAuditLog }) {
       sex: fmtSex,
       age: fmtAge,
       ww: fmtBool,
+      lab: fmtBool,
+      burn: fmtBool,
       notes: fmtNotes,
     };
 

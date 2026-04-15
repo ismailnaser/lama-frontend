@@ -119,6 +119,8 @@ type PendingCreate = {
     sex: Sex;
     age: number;
     ww: boolean;
+    lab: boolean;
+    burn: boolean;
     notes: string;
   };
   created_at: string;
@@ -134,8 +136,12 @@ function normalizePendingPayload(
   const sex = (o.sex === "F" ? "F" : "M") as Sex;
   const age = typeof o.age === "number" ? o.age : Number(o.age);
   const wwRaw = o.ww;
+  const labRaw = o.lab;
+  const burnRaw = o.burn;
   const notesRaw = o.notes;
   let ww = false;
+  let lab = false;
+  let burn = false;
   let notes = "";
   if (typeof wwRaw === "boolean") {
     ww = wwRaw;
@@ -144,8 +150,18 @@ function normalizePendingPayload(
     if (s === "1" || s === "true" || s === "yes") ww = true;
     else if (s !== "") notes = wwRaw;
   }
+  if (typeof labRaw === "boolean") lab = labRaw;
+  else if (typeof labRaw === "string") {
+    const s = labRaw.trim().toLowerCase();
+    if (s === "1" || s === "true" || s === "yes") lab = true;
+  }
+  if (typeof burnRaw === "boolean") burn = burnRaw;
+  else if (typeof burnRaw === "string") {
+    const s = burnRaw.trim().toLowerCase();
+    if (s === "1" || s === "true" || s === "yes") burn = true;
+  }
   if (typeof notesRaw === "string" && notesRaw.trim()) notes = notesRaw.trim();
-  return { id_no, sex, age: Number.isFinite(age) ? age : 0, ww, notes };
+  return { id_no, sex, age: Number.isFinite(age) ? age : 0, ww, lab, burn, notes };
 }
 
 function readPending(): PendingCreate[] {
@@ -211,6 +227,8 @@ export default function Home() {
     sex: Sex;
     age: string;
     ww: boolean;
+    lab: boolean;
+    burn: boolean;
     notes: string;
   }>(null);
   const [editSaving, setEditSaving] = useState(false);
@@ -223,6 +241,8 @@ export default function Home() {
     sex: "M" as Sex,
     age: "",
     ww: false,
+    lab: false,
+    burn: false,
     notes: "",
   });
 
@@ -253,13 +273,15 @@ export default function Home() {
     sex: Sex;
     age: string;
     ww: boolean;
+    lab: boolean;
+    burn: boolean;
     notes: string;
   }>(null);
   const [pendingSaving, setPendingSaving] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const [sort, setSort] = useState<{
-    key: "id_no" | "sex" | "age" | "created_at" | "ww" | "notes";
+    key: "id_no" | "sex" | "age" | "created_at" | "ww" | "lab" | "burn" | "notes";
     dir: "asc" | "desc";
   }>({ key: "created_at", dir: "desc" });
 
@@ -537,6 +559,8 @@ export default function Home() {
         sex: form.sex,
         age: ageNum,
         ww: form.ww,
+        lab: form.lab,
+        burn: form.burn,
         notes: form.notes.trim(),
       };
 
@@ -547,7 +571,7 @@ export default function Home() {
         ];
         writePending(next);
         setPendingCount(next.length);
-        setForm((p) => ({ ...p, id_no: "", age: "", ww: false, notes: "" }));
+        setForm((p) => ({ ...p, id_no: "", age: "", ww: false, lab: false, burn: false, notes: "" }));
         showToast("success", "Saved offline. Will sync when online.");
         return;
       }
@@ -558,6 +582,8 @@ export default function Home() {
           sex: payload.sex,
           age: payload.age,
           ww: payload.ww,
+          lab: payload.lab,
+          burn: payload.burn,
           notes: payload.notes || null,
         });
       } catch (e) {
@@ -569,13 +595,13 @@ export default function Home() {
           ];
           writePending(next);
           setPendingCount(next.length);
-          setForm((p) => ({ ...p, id_no: "", age: "", ww: false, notes: "" }));
+          setForm((p) => ({ ...p, id_no: "", age: "", ww: false, lab: false, burn: false, notes: "" }));
           showToast("success", "Saved offline. Will sync when online.");
           return;
         }
         throw e;
       }
-      setForm((p) => ({ ...p, id_no: "", age: "", ww: false, notes: "" }));
+      setForm((p) => ({ ...p, id_no: "", age: "", ww: false, lab: false, burn: false, notes: "" }));
       await refresh();
       showToast("success", "Patient saved successfully.");
     } catch (err) {
@@ -646,6 +672,8 @@ export default function Home() {
       const bv = b[sort.key];
       if (sort.key === "age") return (Number(av) - Number(bv)) * dirMul;
       if (sort.key === "ww") return (Number(av) - Number(bv)) * dirMul;
+      if (sort.key === "lab") return (Number(av) - Number(bv)) * dirMul;
+      if (sort.key === "burn") return (Number(av) - Number(bv)) * dirMul;
       if (sort.key === "created_at") {
         return (new Date(String(av)).getTime() - new Date(String(bv)).getTime()) * dirMul;
       }
@@ -1306,6 +1334,32 @@ export default function Home() {
                 <label htmlFor="pending-ww" className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
                   WW
                 </label>
+
+                <input
+                  id="pending-lab"
+                  type="checkbox"
+                  checked={pendingEditing.lab}
+                  onChange={(e) =>
+                    setPendingEditing((p) => (p ? { ...p, lab: e.target.checked } : p))
+                  }
+                  className="ml-3 h-4 w-4 rounded border-zinc-300 text-slate-600 focus:ring-slate-500 dark:border-zinc-600 dark:bg-zinc-950"
+                />
+                <label htmlFor="pending-lab" className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
+                  Lab
+                </label>
+
+                <input
+                  id="pending-burn"
+                  type="checkbox"
+                  checked={pendingEditing.burn}
+                  onChange={(e) =>
+                    setPendingEditing((p) => (p ? { ...p, burn: e.target.checked } : p))
+                  }
+                  className="ml-3 h-4 w-4 rounded border-zinc-300 text-slate-600 focus:ring-slate-500 dark:border-zinc-600 dark:bg-zinc-950"
+                />
+                <label htmlFor="pending-burn" className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
+                  Burn
+                </label>
               </div>
 
               <div className="mt-3">
@@ -1367,6 +1421,8 @@ export default function Home() {
                                 sex: pendingEditing.sex,
                                 age: ageNum,
                                 ww: pendingEditing.ww,
+                                lab: pendingEditing.lab,
+                                burn: pendingEditing.burn,
                                 notes: pendingEditing.notes.trim(),
                               },
                             }
@@ -1451,6 +1507,8 @@ export default function Home() {
                         <th className="bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Sex</th>
                         <th className="bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Age</th>
                         <th className="bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">WW</th>
+                        <th className="bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Lab</th>
+                        <th className="bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Burn</th>
                         <th className="bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Notes</th>
                         <th className="bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">Saved at</th>
                         <th className="bg-zinc-100 px-3 py-2 text-right dark:bg-zinc-800/60">
@@ -1470,6 +1528,12 @@ export default function Home() {
                           <td className="px-3 py-2">
                             <WarBoolCell value={it.payload.ww} />
                           </td>
+                          <td className="px-3 py-2">
+                            <WarBoolCell value={it.payload.lab} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <WarBoolCell value={it.payload.burn} />
+                          </td>
                           <td className="px-3 py-2 max-w-[140px] truncate" title={it.payload.notes}>
                             {it.payload.notes || "—"}
                           </td>
@@ -1485,6 +1549,8 @@ export default function Home() {
                                     sex: it.payload.sex,
                                     age: String(it.payload.age),
                                     ww: it.payload.ww,
+                                    lab: it.payload.lab,
+                                    burn: it.payload.burn,
                                     notes: it.payload.notes ?? "",
                                   })
                                 }
@@ -1596,6 +1662,32 @@ export default function Home() {
                 <label htmlFor="edit-ww" className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
                   WW
                 </label>
+
+                <input
+                  id="edit-lab"
+                  type="checkbox"
+                  checked={editing.lab}
+                  onChange={(e) =>
+                    setEditing((p) => (p ? { ...p, lab: e.target.checked } : p))
+                  }
+                  className="ml-3 h-4 w-4 rounded border-zinc-300 text-slate-600 focus:ring-slate-500 dark:border-zinc-600 dark:bg-zinc-950"
+                />
+                <label htmlFor="edit-lab" className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
+                  Lab
+                </label>
+
+                <input
+                  id="edit-burn"
+                  type="checkbox"
+                  checked={editing.burn}
+                  onChange={(e) =>
+                    setEditing((p) => (p ? { ...p, burn: e.target.checked } : p))
+                  }
+                  className="ml-3 h-4 w-4 rounded border-zinc-300 text-slate-600 focus:ring-slate-500 dark:border-zinc-600 dark:bg-zinc-950"
+                />
+                <label htmlFor="edit-burn" className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
+                  Burn
+                </label>
               </div>
 
               <div className="mt-3">
@@ -1645,6 +1737,8 @@ export default function Home() {
                         sex: editing.sex,
                         age: ageNum,
                         ww: editing.ww,
+                        lab: editing.lab,
+                        burn: editing.burn,
                         notes: editing.notes.trim() ? editing.notes.trim() : null,
                       });
                       setEditing(null);
@@ -1875,6 +1969,28 @@ export default function Home() {
                   />
                   <label htmlFor="form-ww" className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
                     WW
+                  </label>
+
+                  <input
+                    id="form-lab"
+                    type="checkbox"
+                    checked={form.lab}
+                    onChange={(e) => setForm((p) => ({ ...p, lab: e.target.checked }))}
+                    className="ml-3 h-4 w-4 rounded border-zinc-300 text-slate-600 focus:ring-slate-500 dark:border-zinc-600 dark:bg-zinc-950"
+                  />
+                  <label htmlFor="form-lab" className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
+                    Lab
+                  </label>
+
+                  <input
+                    id="form-burn"
+                    type="checkbox"
+                    checked={form.burn}
+                    onChange={(e) => setForm((p) => ({ ...p, burn: e.target.checked }))}
+                    className="ml-3 h-4 w-4 rounded border-zinc-300 text-slate-600 focus:ring-slate-500 dark:border-zinc-600 dark:bg-zinc-950"
+                  />
+                  <label htmlFor="form-burn" className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
+                    Burn
                   </label>
                 </div>
 
@@ -2221,6 +2337,26 @@ export default function Home() {
                           WW <span className="text-zinc-400">⇅</span>
                         </button>
                       </th>
+                      <th className="sticky top-0 w-[72px] bg-zinc-100 px-2 py-2 dark:bg-zinc-800/60 sm:w-[80px] sm:px-4 sm:py-3 border-r border-zinc-200 dark:border-zinc-800">
+                        <button
+                          type="button"
+                          onClick={() => toggleSort("lab")}
+                          className="inline-flex items-center gap-1"
+                          title="Lab"
+                        >
+                          Lab <span className="text-zinc-400">⇅</span>
+                        </button>
+                      </th>
+                      <th className="sticky top-0 w-[80px] bg-zinc-100 px-2 py-2 dark:bg-zinc-800/60 sm:w-[88px] sm:px-4 sm:py-3 border-r border-zinc-200 dark:border-zinc-800">
+                        <button
+                          type="button"
+                          onClick={() => toggleSort("burn")}
+                          className="inline-flex items-center gap-1"
+                          title="Burn"
+                        >
+                          Burn <span className="text-zinc-400">⇅</span>
+                        </button>
+                      </th>
                       <th className="sticky top-0 min-w-[100px] bg-zinc-100 px-2 py-2 dark:bg-zinc-800/60 sm:px-4 sm:py-3 border-r border-zinc-200 dark:border-zinc-800">
                         <button
                           type="button"
@@ -2269,6 +2405,12 @@ export default function Home() {
                           <td className="w-[72px] px-2 py-2 align-top sm:w-[80px] sm:px-4 sm:py-3 border-r border-zinc-200 dark:border-zinc-800">
                             <WarBoolCell value={Boolean(p.ww)} />
                           </td>
+                          <td className="w-[72px] px-2 py-2 align-top sm:w-[80px] sm:px-4 sm:py-3 border-r border-zinc-200 dark:border-zinc-800">
+                            <WarBoolCell value={Boolean(p.lab)} />
+                          </td>
+                          <td className="w-[80px] px-2 py-2 align-top sm:w-[88px] sm:px-4 sm:py-3 border-r border-zinc-200 dark:border-zinc-800">
+                            <WarBoolCell value={Boolean(p.burn)} />
+                          </td>
                           <td className="min-w-[100px] px-2 py-2 align-top sm:px-4 sm:py-3 border-r border-zinc-200 dark:border-zinc-800">
                             <NotesPreview value={p.notes ?? null} />
                           </td>
@@ -2294,6 +2436,8 @@ export default function Home() {
                                     sex: p.sex,
                                     age: String(p.age ?? ""),
                                     ww: Boolean(p.ww),
+                                    lab: Boolean(p.lab),
+                                    burn: Boolean(p.burn),
                                     notes: p.notes ?? "",
                                   });
                                 }}

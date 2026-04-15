@@ -730,7 +730,7 @@ export default function Home() {
 
         {auditOpen ? (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center"
             role="dialog"
             aria-modal="true"
             aria-label="Patient audit log"
@@ -741,7 +741,7 @@ export default function Home() {
               onClick={() => setAuditOpen(null)}
               aria-label="Close"
             />
-            <div className="relative w-full max-w-3xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="relative my-4 w-full max-w-3xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:my-0 sm:max-h-[85vh] sm:overflow-hidden">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                   Audit log — ID {auditOpen.patient.id_no}
@@ -758,7 +758,7 @@ export default function Home() {
               {auditOpen.logs.length === 0 ? (
                 <div className="text-sm text-zinc-600 dark:text-zinc-300">No audit entries.</div>
               ) : (
-                <div className="max-h-[60vh] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+                <div className="max-h-[70vh] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800 sm:max-h-full">
                   <table className="w-full border-separate border-spacing-0 text-xs">
                     <thead>
                       <tr className="text-left font-semibold text-zinc-700 dark:text-zinc-200">
@@ -797,7 +797,7 @@ export default function Home() {
 
         {adminOpen ? (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center"
             role="dialog"
             aria-modal="true"
             aria-label="Admin user management"
@@ -808,7 +808,7 @@ export default function Home() {
               onClick={() => setAdminOpen(false)}
               aria-label="Close"
             />
-            <div className="relative w-full max-w-5xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="relative my-4 w-full max-w-5xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:my-0 sm:max-h-[85vh] sm:overflow-hidden">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                   Admin — Users
@@ -822,7 +822,7 @@ export default function Home() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-5">
+              <div className="grid max-h-[80vh] grid-cols-1 gap-3 overflow-auto lg:max-h-full lg:grid-cols-5">
                 <div className="lg:col-span-2">
                   <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
                     <div className="mb-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200">

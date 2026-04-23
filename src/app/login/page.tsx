@@ -27,7 +27,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-full flex-1 bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
-      <div className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center px-4 py-10 sm:px-6">
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-between px-4 py-10 sm:px-6">
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <div className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
             Surgical Dressing Log
@@ -70,6 +70,15 @@ export default function LoginPage() {
               {loading ? "Signing in..." : "Sign in"}
             </button>
           </form>
+        </div>
+
+        <div className="mt-6 flex justify-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+            <span>Developed by Radar Tech</span>
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium normal-case tracking-normal text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+              radartech85@gmail.com
+            </span>
+          </div>
         </div>
       </div>
     </div>

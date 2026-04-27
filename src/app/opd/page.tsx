@@ -3,7 +3,7 @@
 import { fetchCurrentUser, logout } from "@/lib/authApi";
 import { getAuthToken, setAuthToken, type AuthUser } from "@/lib/auth";
 import { Ban, Download, LogOut, Moon, Pencil, Plus, Shield, Sun, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createUser, deleteUser, listUsers, type AdminUserRow, updateUser } from "@/lib/usersApi";
 import { PwaClient } from "@/components/PwaClient";
@@ -221,7 +221,7 @@ function buildOpdDemoEntries(username: string): OpdEntry[] {
   return entries;
 }
 
-export default function OpdPage() {
+function OpdPageContent() {
   const PAGE_SIZE = 10;
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -767,6 +767,7 @@ export default function OpdPage() {
     const normalizedDiagnoses = editForm.diagnoses.map((d) =>
       d === INFECTIOUS_DISEASE_LABEL ? infectiousFinal : d
     );
+    const normalizedAgeGroup = normalizeAgeGroup(editForm.ageGroup);
 
     const editingDay = isoDayKey(editingEntry.createdAt);
     const targetId = editForm.patientId.trim();
@@ -789,7 +790,7 @@ export default function OpdPage() {
             ...row,
             patientId: editForm.patientId.trim(),
             gender: editForm.gender,
-            ageGroup: editForm.ageGroup,
+            ageGroup: normalizedAgeGroup,
             diagnoses: normalizedDiagnoses,
             warWounded: editForm.warWounded,
             disposition: editForm.disposition,
@@ -1769,5 +1770,23 @@ export default function OpdPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+export default function OpdPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-full flex-1 bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
+          <div className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center px-4 py-10 sm:px-6">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center text-sm text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+              Loading...
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <OpdPageContent />
+    </Suspense>
   );
 }

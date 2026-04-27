@@ -1,10 +1,10 @@
-import { API_BASE_URL } from "./config";
+import { buildApiUrl } from "./config";
 import { setActiveAppType, setAuthToken, type AppType, type AuthUser } from "./auth";
 import { apiFetch } from "./http";
 import { humanizeApiErrorText } from "./apiErrors";
 
 export async function login(username: string, password: string, appType: AppType) {
-  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+  const res = await apiFetch(buildApiUrl("/auth/login"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password, app_type: appType }),
@@ -22,12 +22,12 @@ export async function login(username: string, password: string, appType: AppType
 }
 
 export async function logout() {
-  await apiFetch(`${API_BASE_URL}/auth/logout`, { method: "POST" }).catch(() => undefined);
+  await apiFetch(buildApiUrl("/auth/logout"), { method: "POST" }).catch(() => undefined);
   setAuthToken(null);
 }
 
 export async function fetchCurrentUser(): Promise<AuthUser> {
-  const res = await apiFetch(`${API_BASE_URL}/auth/me`, { cache: "no-store" });
+  const res = await apiFetch(buildApiUrl("/auth/me"), { cache: "no-store" });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(humanizeApiErrorText(text, `Request failed (${res.status})`));

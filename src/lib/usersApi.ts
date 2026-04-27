@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./config";
+import { buildApiUrl } from "./config";
 import { apiFetch } from "./http";
 import { humanizeApiErrorText } from "./apiErrors";
 
@@ -14,7 +14,7 @@ export type AdminUserRow = {
 };
 
 export async function listUsers() {
-  const res = await apiFetch(`${API_BASE_URL}/users`, { cache: "no-store" });
+  const res = await apiFetch(buildApiUrl("/users"), { cache: "no-store" });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(humanizeApiErrorText(text, `Request failed (${res.status})`));
@@ -30,7 +30,7 @@ export async function createUser(input: {
   role: "admin" | "user";
   email?: string | null;
 }) {
-  const res = await apiFetch(`${API_BASE_URL}/users`, {
+  const res = await apiFetch(buildApiUrl("/users"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -54,7 +54,7 @@ export async function updateUser(
     is_active: boolean;
   }>
 ) {
-  const res = await apiFetch(`${API_BASE_URL}/users/${id}`, {
+  const res = await apiFetch(buildApiUrl(`/users/${id}`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -68,7 +68,7 @@ export async function updateUser(
 }
 
 export async function deleteUser(id: number) {
-  const res = await apiFetch(`${API_BASE_URL}/users/${id}`, { method: "DELETE" });
+  const res = await apiFetch(buildApiUrl(`/users/${id}`), { method: "DELETE" });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(humanizeApiErrorText(text, `Request failed (${res.status})`));

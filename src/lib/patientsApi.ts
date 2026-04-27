@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./config";
+import { buildApiUrl } from "./config";
 import { apiFetch } from "./http";
 import { humanizeApiErrorText } from "./apiErrors";
 
@@ -43,7 +43,7 @@ function toQueryString(filters: PatientFilters) {
 }
 
 export async function listPatients(filters: PatientFilters) {
-  const res = await apiFetch(`${API_BASE_URL}/patients${toQueryString(filters)}`, {
+  const res = await apiFetch(`${buildApiUrl("/patients")}${toQueryString(filters)}`, {
     cache: "no-store",
   });
   if (!res.ok) {
@@ -64,7 +64,7 @@ export async function createPatient(input: {
   burn?: boolean;
   notes?: string | null;
 }) {
-  const res = await apiFetch(`${API_BASE_URL}/patients`, {
+  const res = await apiFetch(buildApiUrl("/patients"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -87,7 +87,7 @@ export async function createPatient(input: {
 }
 
 export async function exportPatientsExcel(filters: PatientFilters) {
-  const res = await apiFetch(`${API_BASE_URL}/patients/excel${toQueryString(filters)}`, {
+  const res = await apiFetch(`${buildApiUrl("/patients/excel")}${toQueryString(filters)}`, {
     cache: "no-store",
   });
   if (!res.ok) {
@@ -99,7 +99,7 @@ export async function exportPatientsExcel(filters: PatientFilters) {
 }
 
 export async function getPatientsCount() {
-  const res = await apiFetch(`${API_BASE_URL}/patients/count`, { cache: "no-store" });
+  const res = await apiFetch(buildApiUrl("/patients/count"), { cache: "no-store" });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(text || `Request failed (${res.status})`);
@@ -121,7 +121,7 @@ export async function updatePatient(
     notes: string | null;
   }>
 ) {
-  const res = await apiFetch(`${API_BASE_URL}/patients/${id}`, {
+  const res = await apiFetch(buildApiUrl(`/patients/${id}`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -135,7 +135,7 @@ export async function updatePatient(
 }
 
 export async function deletePatient(id: number) {
-  const res = await apiFetch(`${API_BASE_URL}/patients/${id}`, {
+  const res = await apiFetch(buildApiUrl(`/patients/${id}`), {
     method: "DELETE",
   });
   if (!res.ok) {
@@ -154,7 +154,7 @@ export type PatientAuditLog = {
 };
 
 export async function getPatientAudits(id: number) {
-  const res = await apiFetch(`${API_BASE_URL}/patients/${id}/audits`, { cache: "no-store" });
+  const res = await apiFetch(buildApiUrl(`/patients/${id}/audits`), { cache: "no-store" });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(text || `Request failed (${res.status})`);

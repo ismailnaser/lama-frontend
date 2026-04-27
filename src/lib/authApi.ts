@@ -1,13 +1,13 @@
 import { API_BASE_URL } from "./config";
-import { setAuthToken, type AuthUser } from "./auth";
+import { setActiveAppType, setAuthToken, type AppType, type AuthUser } from "./auth";
 import { apiFetch } from "./http";
 import { humanizeApiErrorText } from "./apiErrors";
 
-export async function login(username: string, password: string) {
+export async function login(username: string, password: string, appType: AppType) {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, app_type: appType }),
   });
 
   if (!res.ok) {
@@ -16,7 +16,8 @@ export async function login(username: string, password: string) {
   }
 
   const json = (await res.json()) as { token: string; user: AuthUser };
-  setAuthToken(json.token);
+  setActiveAppType(appType);
+  setAuthToken(json.token, appType);
   return json.user;
 }
 

@@ -1,6 +1,15 @@
 // Runtime config for static deployments.
-// Set this to your backend origin (with or without /api). Example:
-// window.__LAMA_API_URL__ = "https://lama-backend-xyz.ondigitalocean.app";
-// window.__LAMA_API_URL__ = "https://lama-backend-xyz.ondigitalocean.app/api";
-window.__LAMA_API_URL__ = "https://surgical-dressing-log-z4xd6.ondigitalocean.app/api/api";
+// This keeps both environments working:
+// - Local frontend (localhost/127.0.0.1) -> local backend
+// - Hosted frontend -> hosted backend
+(function () {
+  var isLocalHost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+
+  var hostedApiUrl = "https://surgical-dressing-log-z4xd6.ondigitalocean.app/api";
+  var localApiUrl = "http://127.0.0.1:8000/api";
+
+  window.__LAMA_API_URL__ = isLocalHost ? localApiUrl : hostedApiUrl;
+})();
 

@@ -1,4 +1,4 @@
-/* Surgical Dressing Log — offline shell cache */
+/* OPD LoggerX & Surgical Dressing Log — offline shell cache */
 const CACHE = "sdl-app-v3";
 
 self.addEventListener("install", (event) => {

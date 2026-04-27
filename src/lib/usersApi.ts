@@ -8,6 +8,7 @@ export type AdminUserRow = {
   username: string;
   email: string | null;
   role: "admin" | "user";
+  app_type: "surgical" | "opd";
   is_active: boolean;
   created_at: string;
 };

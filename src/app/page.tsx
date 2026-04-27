@@ -387,7 +387,13 @@ export default function Home() {
       }
       try {
         const u = await fetchCurrentUser();
-        if (!cancelled) setAuthUser(u);
+        if (!cancelled) {
+          if (u.app_type !== "surgical") {
+            router.replace("/opd");
+            return;
+          }
+          setAuthUser(u);
+        }
       } catch {
         setAuthToken(null);
         if (!cancelled) router.replace("/login");

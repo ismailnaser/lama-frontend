@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Surgical Dressing Log",
-  description: "Surgical dressing log — install for offline use.",
+  title: "OPD LoggerX & Surgical Dressing Log",
+  description: "OPD LoggerX & Surgical Dressing Log — install for offline use.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,

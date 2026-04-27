@@ -3,11 +3,13 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { login } from "@/lib/authApi";
+import type { AppType } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [appType, setAppType] = useState<AppType>("surgical");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -16,8 +18,8 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      await login(username, password);
-      router.replace("/");
+      await login(username, password, appType);
+      router.replace(appType === "opd" ? "/opd" : "/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -30,9 +32,33 @@ export default function LoginPage() {
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-between px-4 py-10 sm:px-6">
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <div className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Surgical Dressing Log
+            Sign In
           </div>
           <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Sign in to continue</div>
+          <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-zinc-200 p-1 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setAppType("surgical")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+                appType === "surgical"
+                  ? "bg-slate-700 text-white"
+                  : "bg-transparent text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              }`}
+            >
+              Surgical Dressing Log
+            </button>
+            <button
+              type="button"
+              onClick={() => setAppType("opd")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+                appType === "opd"
+                  ? "bg-slate-700 text-white"
+                  : "bg-transparent text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              }`}
+            >
+              OPD LoggerX
+            </button>
+          </div>
 
           {error ? (
             <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-900 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-100">
@@ -46,6 +72,7 @@ export default function LoginPage() {
               <input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                aria-label="Username"
                 className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
                 autoComplete="username"
                 required
@@ -57,6 +84,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 type="password"
+                aria-label="Password"
                 className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
                 autoComplete="current-password"
                 required

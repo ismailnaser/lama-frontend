@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { fetchCurrentUser, logout } from "@/lib/authApi";
+import { PwaClient } from "@/components/PwaClient";
 import { getAuthToken, setAuthToken, type AuthUser } from "@/lib/auth";
 import {
   createPatient,
+  deletePatient,
   exportPatientsExcel,
   listPatients,
+  updatePatient,
   type Patient,
   type Sex,
 } from "@/lib/patientsApi";
@@ -24,6 +27,21 @@ type InfectionChoice =
   | "measles"
   | "menningits"
   | "other";
+
+type PendingDoctorCreate = {
+  id: string;
+  payload: {
+    id_no: string;
+    sex: Sex;
+    ageRange: AgeRange;
+    selectedDx: number[];
+    infectionChoice: InfectionChoice | "";
+    infectionOtherText: string;
+    ww: boolean;
+    disposition: Disposition;
+  };
+  created_at: string;
+};
 
 const DIAGNOSES = [
   { no: 1, name: "Respiratory Tract Infection", category: "Medical" },
@@ -49,6 +67,7 @@ const DIAGNOSES = [
   { no: 21, name: "Other Surgical", category: "Surgical" },
   { no: 22, name: "Dental", category: "Medical" },
 ] as const;
+const DOCTOR_PENDING_KEY = "doctorPendingPatientCreates";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -57,6 +76,19 @@ function pad2(n: number) {
 function todayYmd() {
   const d = new Date();
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function ymdFromDate(dt: Date) {
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+}
+
+function startOfWeekSaturday(refYmd: string) {
+  const [y, m, d] = refYmd.split("-").map(Number);
+  const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
+  const dow = dt.getDay(); // 0=Sun ... 6=Sat
+  const daysSinceSaturday = (dow - 6 + 7) % 7;
+  dt.setDate(dt.getDate() - daysSinceSaturday);
+  return ymdFromDate(dt);
 }
 
 function parseDoctorNotes(notes: string | null) {
@@ -84,6 +116,23 @@ function parseDoctorNotes(notes: string | null) {
   };
 }
 
+function readDoctorPending(): PendingDoctorCreate[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(DOCTOR_PENDING_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as PendingDoctorCreate[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDoctorPending(items: PendingDoctorCreate[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(DOCTOR_PENDING_KEY, JSON.stringify(items));
+}
+
 export default function DoctorPage() {
   const router = useRouter();
   const [authReady, setAuthReady] = useState(false);
@@ -95,6 +144,26 @@ export default function DoctorPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [rows, setRows] = useState<Patient[]>([]);
+  const [summaryRows, setSummaryRows] = useState<Patient[]>([]);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryLabel, setSummaryLabel] = useState("Today");
+  const [summaryMode, setSummaryMode] = useState<"date" | "range">("date");
+  const [summaryDate, setSummaryDate] = useState(todayYmd());
+  const [summaryFrom, setSummaryFrom] = useState(todayYmd());
+  const [summaryTo, setSummaryTo] = useState(todayYmd());
+  const [summaryExporting, setSummaryExporting] = useState(false);
+  const [tableMode, setTableMode] = useState<"daily" | "weakly" | "monthly" | "range">("daily");
+  const [tableRefDate, setTableRefDate] = useState(todayYmd());
+  const [tableFromDate, setTableFromDate] = useState(todayYmd());
+  const [tableToDate, setTableToDate] = useState(todayYmd());
+  const [tableCreator, setTableCreator] = useState("all");
+  const [tableLoading, setTableLoading] = useState(false);
+  const [tableExporting, setTableExporting] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [pendingOpen, setPendingOpen] = useState(false);
+  const [pendingItems, setPendingItems] = useState<PendingDoctorCreate[]>([]);
+  const [editingPatientId, setEditingPatientId] = useState<number | null>(null);
+  const [deletingPatientId, setDeletingPatientId] = useState<number | null>(null);
 
   const [patientId, setPatientId] = useState("");
   const [sex, setSex] = useState<Sex>("M");
@@ -105,7 +174,6 @@ export default function DoctorPage() {
   const [infectionOtherText, setInfectionOtherText] = useState("");
   const [ww, setWw] = useState(false);
   const [disposition, setDisposition] = useState<Disposition>("discharged");
-  const [customNotes, setCustomNotes] = useState("");
   const [adminCreate, setAdminCreate] = useState({
     name: "",
     username: "",
@@ -142,7 +210,14 @@ export default function DoctorPage() {
     setInfectionOtherText("");
     setWw(false);
     setDisposition("discharged");
-    setCustomNotes("");
+    setEditingPatientId(null);
+  }
+
+  function ageToRange(age: number): AgeRange {
+    if (age <= 4) return "lt5";
+    if (age <= 14) return "5to14";
+    if (age <= 17) return "15to17";
+    return "gte18";
   }
 
   function applyKeypadInput(value: string) {
@@ -195,6 +270,8 @@ export default function DoctorPage() {
     try {
       const data = await listPatients({ date: todayYmd() });
       setRows(data);
+      setSummaryRows(data);
+      setSummaryLabel("Today");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load data.");
     } finally {
@@ -202,10 +279,157 @@ export default function DoctorPage() {
     }
   }
 
+  function currentTableRange(): { from: string; to: string } {
+    if (tableMode === "daily") {
+      const d = tableRefDate || todayYmd();
+      return { from: d, to: d };
+    }
+    if (tableMode === "weakly") {
+      const d = tableRefDate || todayYmd();
+      return { from: startOfWeekSaturday(d), to: d };
+    }
+    if (tableMode === "monthly") {
+      const d = tableRefDate || todayYmd();
+      const [y, m] = d.split("-").map(Number);
+      return { from: `${y}-${pad2(m ?? 1)}-01`, to: d };
+    }
+    return { from: tableFromDate || todayYmd(), to: tableToDate || todayYmd() };
+  }
+
+  async function applyTableFilters() {
+    const { from, to } = currentTableRange();
+    setTableLoading(true);
+    setError(null);
+    try {
+      const data = await listPatients({ from_date: from, to_date: to });
+      const filtered =
+        tableCreator === "all"
+          ? data
+          : data.filter((r) => (r.created_by ?? "").trim() === tableCreator);
+      setRows(filtered);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to apply filters.");
+    } finally {
+      setTableLoading(false);
+    }
+  }
+
+  function buildDoctorPayloadFromForm() {
+    const id = patientId.trim();
+    const ageNum = (() => {
+      if (ageRange === "lt5") return 4;
+      if (ageRange === "5to14") return 10;
+      if (ageRange === "15to17") return 16;
+      if (ageRange === "gte18") return 18;
+      return NaN;
+    })();
+    if (!id) throw new Error("Patient ID is required.");
+    if (!Number.isFinite(ageNum)) throw new Error("Age range is required.");
+    if (selectedDx.length === 0) throw new Error("Select at least one diagnosis.");
+    if (selectedDx.includes(4) && !infectionChoice) {
+      throw new Error("Please select infection disease type.");
+    }
+    if (selectedDx.includes(4) && infectionChoice === "other" && !infectionOtherText.trim()) {
+      throw new Error("Please write the infection disease name in Other.");
+    }
+
+    const selectedDiagItems = DIAGNOSES.filter((d) => selectedDx.includes(d.no));
+    const infectionLabel = (() => {
+      if (infectionChoice === "acute_viral_hepatitis") return "Acute Viral Hepatitis";
+      if (infectionChoice === "mumps") return "Mumps";
+      if (infectionChoice === "chicken_pox") return "Chicken pox";
+      if (infectionChoice === "measles") return "Measles";
+      if (infectionChoice === "menningits") return "Menningits";
+      if (infectionChoice === "other") return `Other: ${infectionOtherText.trim()}`;
+      return "";
+    })();
+    const selectedDxNames = selectedDiagItems.map((d) =>
+      d.no === 4 && infectionLabel ? `Infections Disease (${infectionLabel})` : d.name
+    );
+    const selectedDxNos = selectedDiagItems.map((d) => d.no);
+    const hasMedicalCategory = selectedDiagItems.some((d) => d.category === "Medical");
+    const categoryText = selectedDiagItems.every((d) => d.category === "Medical")
+      ? "Medical"
+      : selectedDiagItems.every((d) => d.category === "Surgical")
+        ? "Surgical"
+        : "Mixed";
+    const notes = [`dx_no:${selectedDxNos.join(",")}`, `dx:${selectedDxNames.join(",")}`, `cat:${categoryText}`, `disposition:${disposition}`].join(" | ");
+    const apiPayload = {
+      id_no: id,
+      sex,
+      age: ageNum,
+      room: hasMedicalCategory ? ("room2" as const) : ("room1" as const),
+      ww,
+      notes,
+    };
+    const pendingPayload: PendingDoctorCreate["payload"] = {
+      id_no: id,
+      sex,
+      ageRange: ageRange as AgeRange,
+      selectedDx: [...selectedDx],
+      infectionChoice,
+      infectionOtherText,
+      ww,
+      disposition,
+    };
+    return { apiPayload, pendingPayload };
+  }
+
+  async function flushPendingCreates() {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    const items = readDoctorPending();
+    if (items.length === 0) return;
+    const remaining: PendingDoctorCreate[] = [];
+    for (const it of items) {
+      try {
+        const p = it.payload;
+        setPatientId(p.id_no);
+        setSex(p.sex);
+        setAgeRange(p.ageRange);
+        setSelectedDx(p.selectedDx);
+        setInfectionChoice(p.infectionChoice);
+        setInfectionOtherText(p.infectionOtherText);
+        setWw(p.ww);
+        setDisposition(p.disposition);
+        const { apiPayload } = buildDoctorPayloadFromForm();
+        await createPatient(apiPayload);
+      } catch {
+        remaining.push(it);
+      }
+    }
+    writeDoctorPending(remaining);
+    setPendingCount(remaining.length);
+    if (remaining.length !== items.length) {
+      setToast("Pending doctor patients synced.");
+      await refreshToday();
+    }
+  }
+
+  function openPending() {
+    const items = readDoctorPending();
+    setPendingItems(items);
+    setPendingOpen(true);
+  }
+
   useEffect(() => {
     if (!authReady || !authUser) return;
     void refreshToday();
+    setPendingCount(readDoctorPending().length);
   }, [authReady, authUser]);
+
+  useEffect(() => {
+    function onOnline() {
+      void flushPendingCreates();
+    }
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []);
+
+  useEffect(() => {
+    if (!authReady || !authUser || activeSection !== "tables") return;
+    void applyTableFilters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authReady, authUser, activeSection]);
 
   useEffect(() => {
     const stored = localStorage.getItem("theme");
@@ -234,13 +458,13 @@ export default function DoctorPage() {
   }, [hasSelectedSurgical, ww]);
 
   const stats = useMemo(() => {
-    const total = rows.length;
-    const male = rows.filter((r) => r.sex === "M").length;
-    const female = rows.filter((r) => r.sex === "F").length;
-    const wwCount = rows.filter((r) => r.ww).length;
+    const total = summaryRows.length;
+    const male = summaryRows.filter((r) => r.sex === "M").length;
+    const female = summaryRows.filter((r) => r.sex === "F").length;
+    const wwCount = summaryRows.filter((r) => r.ww).length;
     const nonWw = total - wwCount;
     const dxCounts = new Map<string, number>();
-    for (const r of rows) {
+    for (const r of summaryRows) {
       const parsed = parseDoctorNotes(r.notes);
       for (const d of parsed.dx) {
         dxCounts.set(d, (dxCounts.get(d) ?? 0) + 1);
@@ -249,16 +473,26 @@ export default function DoctorPage() {
     const topDx = [...dxCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
     const ageBreakdown = [
       { label: "0-4", match: (n: number) => n <= 4 },
-      { label: "5-17", match: (n: number) => n >= 5 && n <= 17 },
-      { label: "18-49", match: (n: number) => n >= 18 && n <= 49 },
-      { label: "50+", match: (n: number) => n >= 50 },
+      { label: "5-14", match: (n: number) => n >= 5 && n <= 14 },
+      { label: "15-17", match: (n: number) => n >= 15 && n <= 17 },
+      { label: ">=18", match: (n: number) => n >= 18 },
     ].map((g) => ({
       label: g.label,
-      male: rows.filter((r) => g.match(r.age) && r.sex === "M").length,
-      female: rows.filter((r) => g.match(r.age) && r.sex === "F").length,
+      male: summaryRows.filter((r) => g.match(r.age) && r.sex === "M").length,
+      female: summaryRows.filter((r) => g.match(r.age) && r.sex === "F").length,
     }));
     return { total, male, female, wwCount, nonWw, topDx, ageBreakdown };
-  }, [rows]);
+  }, [summaryRows]);
+  const orderedDiagnoses = useMemo(
+    () =>
+      [...DIAGNOSES].sort((a, b) => {
+        const ca = a.category === "Medical" ? 0 : 1;
+        const cb = b.category === "Medical" ? 0 : 1;
+        if (ca !== cb) return ca - cb;
+        return a.no - b.no;
+      }),
+    []
+  );
   async function reloadAdminUsers() {
     if (!canManageDoctorUsers) return;
     setAdminLoading(true);
@@ -276,70 +510,98 @@ export default function DoctorPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    const id = patientId.trim();
-    const ageNum = (() => {
-      if (ageRange === "lt5") return 4;
-      if (ageRange === "5to14") return 10;
-      if (ageRange === "15to17") return 16;
-      if (ageRange === "gte18") return 18;
-      return NaN;
-    })();
-    if (!id) return setError("Patient ID is required.");
-    if (!Number.isFinite(ageNum)) return setError("Age range is required.");
-    if (selectedDx.length === 0) return setError("Select at least one diagnosis.");
-    if (selectedDx.includes(4) && !infectionChoice) {
-      return setError("Please select infection disease type.");
-    }
-    if (selectedDx.includes(4) && infectionChoice === "other" && !infectionOtherText.trim()) {
-      return setError("Please write the infection disease name in Other.");
-    }
-
-    const selectedDiagItems = DIAGNOSES.filter((d) => selectedDx.includes(d.no));
-    const infectionLabel = (() => {
-      if (infectionChoice === "acute_viral_hepatitis") return "Acute Viral Hepatitis";
-      if (infectionChoice === "mumps") return "Mumps";
-      if (infectionChoice === "chicken_pox") return "Chicken pox";
-      if (infectionChoice === "measles") return "Measles";
-      if (infectionChoice === "menningits") return "Menningits";
-      if (infectionChoice === "other") return `Other: ${infectionOtherText.trim()}`;
-      return "";
-    })();
-    const selectedDxNames = selectedDiagItems.map((d) =>
-      d.no === 4 && infectionLabel ? `Infections Disease (${infectionLabel})` : d.name
-    );
-    const selectedDxNos = selectedDiagItems.map((d) => d.no);
-    const hasMedicalCategory = selectedDiagItems.some((d) => d.category === "Medical");
-    const categoryText = selectedDiagItems.every((d) => d.category === "Medical")
-      ? "Medical"
-      : selectedDiagItems.every((d) => d.category === "Surgical")
-        ? "Surgical"
-        : "Mixed";
-
-    const notesParts = [
-      `dx_no:${selectedDxNos.join(",")}`,
-      `dx:${selectedDxNames.join(",")}`,
-      `cat:${categoryText}`,
-      `disposition:${disposition}`,
-      customNotes.trim() ? `custom:${customNotes.trim()}` : "",
-    ].filter(Boolean);
-
     setSaving(true);
     try {
-      await createPatient({
-        id_no: id,
-        sex,
-        age: ageNum,
-        room: hasMedicalCategory ? "room2" : "room1",
-        ww,
-        notes: notesParts.join(" | "),
-      });
+      const { apiPayload, pendingPayload } = buildDoctorPayloadFromForm();
+      if (editingPatientId) {
+        await updatePatient(editingPatientId, apiPayload);
+      } else {
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          const next: PendingDoctorCreate[] = [
+            ...readDoctorPending(),
+            { id: crypto.randomUUID(), payload: pendingPayload, created_at: new Date().toISOString() },
+          ];
+          writeDoctorPending(next);
+          setPendingCount(next.length);
+          resetForm();
+          setToast("Saved offline. Check Pending.");
+          return;
+        }
+        await createPatient(apiPayload);
+      }
       resetForm();
-      setToast("Saved successfully.");
+      setToast(editingPatientId ? "Updated successfully." : "Saved successfully.");
       await refreshToday();
     } catch (err) {
+      if (!editingPatientId && (err instanceof TypeError || (typeof navigator !== "undefined" && !navigator.onLine))) {
+        try {
+          const { pendingPayload } = buildDoctorPayloadFromForm();
+          const next: PendingDoctorCreate[] = [
+            ...readDoctorPending(),
+            { id: crypto.randomUUID(), payload: pendingPayload, created_at: new Date().toISOString() },
+          ];
+          writeDoctorPending(next);
+          setPendingCount(next.length);
+          resetForm();
+          setToast("Saved offline. Check Pending.");
+          return;
+        } catch {
+          // fall through to generic error
+        }
+      }
       setError(err instanceof Error ? err.message : "Save failed.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function startEditPatient(row: Patient) {
+    const parsed = parseDoctorNotes(row.notes);
+    setEditingPatientId(row.id);
+    setPatientId(row.id_no);
+    setSex(row.sex);
+    setAgeRange(ageToRange(row.age));
+    setSelectedDx(parsed.dxNo.slice(0, 2));
+    setWw(Boolean(row.ww));
+    const disp = parsed.disposition as Disposition;
+    setDisposition(
+      disp === "discharged" || disp === "admitted" || disp === "referred_ed" || disp === "referred_out"
+        ? disp
+        : "discharged"
+    );
+    const inf = parsed.dx.find((x) => x.startsWith("Infections Disease ("));
+    if (inf) {
+      const val = inf.replace("Infections Disease (", "").replace(/\)$/, "").trim();
+      if (val === "Acute Viral Hepatitis") setInfectionChoice("acute_viral_hepatitis");
+      else if (val === "Mumps") setInfectionChoice("mumps");
+      else if (val === "Chicken pox") setInfectionChoice("chicken_pox");
+      else if (val === "Measles") setInfectionChoice("measles");
+      else if (val === "Menningits") setInfectionChoice("menningits");
+      else {
+        setInfectionChoice("other");
+        setInfectionOtherText(val.replace(/^Other:\s*/i, ""));
+      }
+    } else {
+      setInfectionChoice("");
+      setInfectionOtherText("");
+    }
+    setActiveSection("new");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function removePatient(row: Patient) {
+    if (!confirm(`Delete patient ${row.id_no}?`)) return;
+    setDeletingPatientId(row.id);
+    setError(null);
+    try {
+      await deletePatient(row.id);
+      if (editingPatientId === row.id) resetForm();
+      setToast("Patient deleted.");
+      await refreshToday();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete patient.");
+    } finally {
+      setDeletingPatientId(null);
     }
   }
 
@@ -364,6 +626,123 @@ export default function DoctorPage() {
     } finally {
       setExporting(false);
     }
+  }
+
+  async function generateSummaryReport() {
+    setSummaryLoading(true);
+    setError(null);
+    try {
+      if (summaryMode === "date") {
+        const date = summaryDate.trim();
+        if (!date) throw new Error("Please select a date.");
+        const data = await listPatients({ date });
+        setSummaryRows(data);
+        setSummaryLabel(date);
+        return;
+      }
+      const from = summaryFrom.trim();
+      const to = summaryTo.trim();
+      if (!from || !to) throw new Error("Please select both from and to dates.");
+      const data = await listPatients({ from_date: from, to_date: to });
+      setSummaryRows(data);
+      setSummaryLabel(`${from} to ${to}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to generate summary.");
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
+
+  function exportSummaryExcel() {
+    const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+    const lines: string[] = [];
+    lines.push([esc("Doctor Summary"), esc(summaryLabel)].join(";"));
+    lines.push([esc("Metric"), esc("Value")].join(";"));
+    lines.push([esc("Total"), esc(stats.total)].join(";"));
+    lines.push([esc("Male"), esc(stats.male)].join(";"));
+    lines.push([esc("Female"), esc(stats.female)].join(";"));
+    lines.push([esc("Surgical WW"), esc(stats.wwCount)].join(";"));
+    lines.push([esc("Surgical Non-WW"), esc(stats.nonWw)].join(";"));
+    lines.push("");
+    lines.push([esc("Age Group"), esc("Male"), esc("Female")].join(";"));
+    for (const g of stats.ageBreakdown) {
+      lines.push([esc(g.label), esc(g.male), esc(g.female)].join(";"));
+    }
+    lines.push("");
+    lines.push([esc("Top Diagnosis"), esc("Count")].join(";"));
+    if (stats.topDx.length === 0) {
+      lines.push([esc("No data"), esc(0)].join(";"));
+    } else {
+      for (const [dx, count] of stats.topDx) {
+        lines.push([esc(dx), esc(count)].join(";"));
+      }
+    }
+    const csv = "\uFEFF" + lines.join("\r\n") + "\r\n";
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const safeLabel = summaryLabel.replace(/[^\w\-]+/g, "_");
+    downloadBlob(blob, `doctor-summary-${safeLabel}.csv`);
+  }
+
+  const creatorOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) {
+      const u = (r.created_by ?? "").trim();
+      if (u) set.add(u);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [rows]);
+
+  function exportFilteredTableExcel() {
+    const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+    const lines: string[] = [];
+    const { from, to } = currentTableRange();
+    lines.push([esc("Doctor Patients Table"), esc(`${from} to ${to}`)].join(";"));
+    lines.push([esc("Total Patients"), esc(rows.length)].join(";"));
+    lines.push("");
+    lines.push(
+      [
+        esc("#"),
+        esc("Time"),
+        esc("Created Date"),
+        esc("Created By"),
+        esc("Patient ID"),
+        esc("Gender"),
+        esc("Age"),
+        esc("Dx No(s)"),
+        esc("Dx Name(s)"),
+        esc("Cat"),
+        esc("WW"),
+        esc("Disposition"),
+      ].join(";")
+    );
+    rows.forEach((r, idx) => {
+      const parsed = parseDoctorNotes(r.notes);
+      const dt = new Date(r.created_at);
+      const time = isNaN(dt.getTime()) ? "-" : `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+      const createdDate = isNaN(dt.getTime())
+        ? "-"
+        : `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+      const category = parsed.cat || (r.room === "room2" ? "Medical" : "Surgical");
+      lines.push(
+        [
+          esc(idx + 1),
+          esc(time),
+          esc(createdDate),
+          esc((r.created_by ?? "").trim() || "-"),
+          esc(r.id_no),
+          esc(r.sex === "M" ? "Male" : "Female"),
+          esc(r.age),
+          esc(parsed.dxNo.join(", ") || "-"),
+          esc(parsed.dx.join(", ") || "-"),
+          esc(category),
+          esc(r.ww ? "Yes" : "No"),
+          esc(parsed.disposition || "-"),
+        ].join(";")
+      );
+    });
+    const csv = "\uFEFF" + lines.join("\r\n") + "\r\n";
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    downloadBlob(blob, `doctor-table-${from}-to-${to}.csv`);
   }
 
   if (!authReady || !authUser) {
@@ -406,6 +785,16 @@ export default function DoctorPage() {
                   </span>
                 </button>
               ) : null}
+              {pendingCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={openPending}
+                  className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900 shadow-sm transition-colors hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-100 dark:hover:bg-amber-900/30"
+                  title="Pending offline doctor cases"
+                >
+                  {pendingCount} pending
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={async () => {
@@ -440,15 +829,7 @@ export default function DoctorPage() {
                   </>
                 )}
               </button>
-              <button
-                type="button"
-                onClick={() => void onExport()}
-                disabled={!authUser || exporting}
-                className="inline-flex items-center gap-2 rounded-lg bg-slate-600 px-2 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 active:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-600 dark:hover:bg-slate-500 dark:active:bg-slate-700 dark:focus-visible:ring-slate-500 dark:focus-visible:ring-offset-zinc-950"
-              >
-                <Download className="h-4 w-4" />
-                {exporting ? "Exporting..." : "Export Excel"}
-              </button>
+              <PwaClient mode="header" />
             </div>
           </div>
         </div>
@@ -611,7 +992,7 @@ export default function DoctorPage() {
             <div className="mt-3">
               <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
               <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {DIAGNOSES.map((d) => {
+                {orderedDiagnoses.map((d) => {
                   const selected = selectedDx.includes(d.no);
                   return (
                     <button
@@ -693,20 +1074,29 @@ export default function DoctorPage() {
               ) : (
                 <div />
               )}
-              <input value={customNotes} onChange={(e) => setCustomNotes(e.target.value)} placeholder="Optional notes" className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950" />
+              <div />
             </div>
 
             {error ? <div className="mt-3 rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-100">{error}</div> : null}
             {toast ? <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-100">{toast}</div> : null}
 
             <div className="mt-3 flex gap-2">
-              <button disabled={saving} type="submit" className="rounded-xl bg-slate-600 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60">
-                {saving ? "Saving..." : "Save & New"}
+              <button disabled={saving} type="submit" className="cursor-pointer rounded-xl bg-slate-600 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60">
+                {saving ? "Saving..." : editingPatientId ? "Update" : "Save & New"}
               </button>
-              <button type="button" onClick={resetForm} className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold dark:border-zinc-800 dark:bg-zinc-900">
+              {editingPatientId ? (
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="cursor-pointer rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold dark:border-zinc-800 dark:bg-zinc-900"
+                >
+                  Cancel Edit
+                </button>
+              ) : null}
+              <button type="button" onClick={resetForm} className="cursor-pointer rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold dark:border-zinc-800 dark:bg-zinc-900">
                 Reset
               </button>
-              <button type="button" onClick={() => void refreshToday()} className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold dark:border-zinc-800 dark:bg-zinc-900">
+              <button type="button" onClick={() => void refreshToday()} className="cursor-pointer rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold dark:border-zinc-800 dark:bg-zinc-900">
                 Refresh
               </button>
             </div>
@@ -716,18 +1106,114 @@ export default function DoctorPage() {
             className={`rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${
               activeSection === "summary" ? "" : "hidden"
             }`}
+            id="doctor-summary-card"
           >
-            <div className="text-sm font-semibold">Today stats</div>
-            <div className="mt-2 space-y-1 text-sm">
-              <div>Total: {stats.total}</div>
-              <div>Male: {stats.male}</div>
-              <div>Female: {stats.female}</div>
-              <div>Surgical WW/Non: {stats.wwCount}/{stats.nonWw}</div>
+            <div className="mb-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+              <div className="mb-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300">Summary Range</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSummaryMode("date")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                    summaryMode === "date"
+                      ? "bg-slate-600 text-white"
+                      : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                  }`}
+                >
+                  Specific day
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSummaryMode("range")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                    summaryMode === "range"
+                      ? "bg-slate-600 text-white"
+                      : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                  }`}
+                >
+                  Date range
+                </button>
+                {summaryMode === "date" ? (
+                  <input
+                    type="date"
+                    value={summaryDate}
+                    onChange={(e) => setSummaryDate(e.target.value)}
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+                  />
+                ) : (
+                  <>
+                    <input
+                      type="date"
+                      value={summaryFrom}
+                      onChange={(e) => setSummaryFrom(e.target.value)}
+                      className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+                    />
+                    <input
+                      type="date"
+                      value={summaryTo}
+                      onChange={(e) => setSummaryTo(e.target.value)}
+                      className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+                    />
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void generateSummaryReport()}
+                  disabled={summaryLoading}
+                  className="rounded-lg bg-slate-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                >
+                  {summaryLoading ? "Generating..." : "Generate summary"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSummaryExporting(true);
+                    try {
+                      exportSummaryExcel();
+                    } finally {
+                      setSummaryExporting(false);
+                    }
+                  }}
+                  disabled={summaryExporting}
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold dark:border-zinc-800 dark:bg-zinc-900 disabled:opacity-60"
+                >
+                  {summaryExporting ? "Exporting..." : "Export Summary Excel"}
+                </button>
+              </div>
+              <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Showing: {summaryLabel}</div>
             </div>
-            <div className="mt-4 text-xs font-semibold text-zinc-600 dark:text-zinc-300">Top Diagnoses</div>
-            <div className="mt-1 space-y-1 text-sm">
-              {stats.topDx.length === 0 ? <div className="text-zinc-500">No data yet</div> : stats.topDx.map(([dx, c]) => <div key={dx}>{dx}: {c}</div>)}
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">Total</div>
+                <div className="text-2xl font-extrabold">{stats.total}</div>
+              </div>
+              <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">Male</div>
+                <div className="text-2xl font-extrabold">{stats.male}</div>
+              </div>
+              <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">Female</div>
+                <div className="text-2xl font-extrabold">{stats.female}</div>
+              </div>
+              <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">Surgical WW/Non</div>
+                <div className="text-2xl font-extrabold">
+                  {stats.wwCount}/{stats.nonWw}
+                </div>
+              </div>
             </div>
+
+            <div className="mt-4 rounded-xl border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+              <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">Age Breakdown</div>
+              <div className="mt-1">
+                {(() => {
+                  const mapLabel = (l: string) => (l === "0-4" ? "<5" : l);
+                  return stats.ageBreakdown.map((g) => `${mapLabel(g.label)} ${g.male + g.female}`).join(", ");
+                })()}
+              </div>
+            </div>
+
             <div className="mt-4 text-xs font-semibold text-zinc-600 dark:text-zinc-300">Age x Gender</div>
             <div className="mt-1 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
               <table className="w-full text-xs">
@@ -748,6 +1234,15 @@ export default function DoctorPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            <div className="mt-4 text-xs font-semibold text-zinc-600 dark:text-zinc-300">Top Diagnoses</div>
+            <div className="mt-1 space-y-1 text-sm">
+              {stats.topDx.length === 0 ? (
+                <div className="text-zinc-500">No data yet</div>
+              ) : (
+                stats.topDx.map(([dx, c]) => <div key={dx}>{dx}: {c}</div>)
+              )}
             </div>
           </div>
         </div>
@@ -939,6 +1434,122 @@ export default function DoctorPage() {
           </div>
         ) : null}
 
+        {pendingOpen ? (
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Pending offline doctor patients">
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setPendingOpen(false)}
+              aria-label="Close"
+            />
+            <div className="relative my-4 w-full max-w-4xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:my-0">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold">Pending offline patients ({pendingItems.length})</div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      writeDoctorPending([]);
+                      setPendingItems([]);
+                      setPendingCount(0);
+                    }}
+                    className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200"
+                  >
+                    Clear all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await flushPendingCreates();
+                      setPendingItems(readDoctorPending());
+                    }}
+                    className="rounded-lg bg-slate-600 px-3 py-1.5 text-xs font-semibold text-white"
+                  >
+                    Sync now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPendingOpen(false)}
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold dark:border-zinc-800 dark:bg-zinc-950"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              {pendingItems.length === 0 ? (
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
+                  No pending patients.
+                </div>
+              ) : (
+                <div className="overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+                  <table className="w-full border-separate border-spacing-0 text-xs">
+                    <thead>
+                      <tr className="text-left font-semibold text-zinc-600 dark:text-zinc-300">
+                        <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">#</th>
+                        <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Patient ID</th>
+                        <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Gender</th>
+                        <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Age</th>
+                        <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Created At</th>
+                        <th className="sticky top-0 bg-zinc-100 px-3 py-2 text-right dark:bg-zinc-800/70">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingItems.map((it, idx) => (
+                        <tr key={it.id} className="border-t border-zinc-200 dark:border-zinc-800">
+                          <td className="px-3 py-2">{idx + 1}</td>
+                          <td className="px-3 py-2">{it.payload.id_no}</td>
+                          <td className="px-3 py-2">{it.payload.sex === "M" ? "Male" : "Female"}</td>
+                          <td className="px-3 py-2">{it.payload.ageRange}</td>
+                          <td className="px-3 py-2">{new Date(it.created_at).toLocaleString()}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPatientId(it.payload.id_no);
+                                  setSex(it.payload.sex);
+                                  setAgeRange(it.payload.ageRange);
+                                  setSelectedDx(it.payload.selectedDx);
+                                  setInfectionChoice(it.payload.infectionChoice);
+                                  setInfectionOtherText(it.payload.infectionOtherText);
+                                  setWw(it.payload.ww);
+                                  setDisposition(it.payload.disposition);
+                                  const next = readDoctorPending().filter((x) => x.id !== it.id);
+                                  writeDoctorPending(next);
+                                  setPendingItems(next);
+                                  setPendingCount(next.length);
+                                  setPendingOpen(false);
+                                  setActiveSection("new");
+                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                }}
+                                className="rounded-md border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = readDoctorPending().filter((x) => x.id !== it.id);
+                                  writeDoctorPending(next);
+                                  setPendingItems(next);
+                                  setPendingCount(next.length);
+                                }}
+                                className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+
         {userEditing ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
             <button
@@ -1066,6 +1677,21 @@ export default function DoctorPage() {
             <div className="flex gap-2">
               <button
                 type="button"
+                onClick={() => {
+                  setTableExporting(true);
+                  try {
+                    exportFilteredTableExcel();
+                  } finally {
+                    setTableExporting(false);
+                  }
+                }}
+                disabled={tableExporting}
+                className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold dark:border-zinc-800 dark:bg-zinc-900 disabled:opacity-60"
+              >
+                {tableExporting ? "Exporting..." : "Export Filtered Excel"}
+              </button>
+              <button
+                type="button"
                 disabled={exporting}
                 onClick={async () => {
                   setExporting(true);
@@ -1084,14 +1710,112 @@ export default function DoctorPage() {
               </button>
             </div>
           </div>
-          {loading ? (
+          <div className="mb-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+            <div className="mb-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300">Table Filters</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setTableMode("daily")}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                  tableMode === "daily"
+                    ? "bg-slate-600 text-white"
+                    : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                }`}
+              >
+                deaily
+              </button>
+              <button
+                type="button"
+                onClick={() => setTableMode("weakly")}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                  tableMode === "weakly"
+                    ? "bg-slate-600 text-white"
+                    : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                }`}
+              >
+                weakly
+              </button>
+              <button
+                type="button"
+                onClick={() => setTableMode("monthly")}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                  tableMode === "monthly"
+                    ? "bg-slate-600 text-white"
+                    : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                }`}
+              >
+                monthly
+              </button>
+              <button
+                type="button"
+                onClick={() => setTableMode("range")}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                  tableMode === "range"
+                    ? "bg-slate-600 text-white"
+                    : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                }`}
+              >
+                custom range
+              </button>
+              {tableMode === "range" ? (
+                <>
+                  <input
+                    type="date"
+                    value={tableFromDate}
+                    onChange={(e) => setTableFromDate(e.target.value)}
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+                  />
+                  <input
+                    type="date"
+                    value={tableToDate}
+                    onChange={(e) => setTableToDate(e.target.value)}
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+                  />
+                </>
+              ) : (
+                <input
+                  type="date"
+                  value={tableRefDate}
+                  onChange={(e) => setTableRefDate(e.target.value)}
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+                />
+              )}
+              <select
+                value={tableCreator}
+                onChange={(e) => setTableCreator(e.target.value)}
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+              >
+                <option value="all">All creators</option>
+                {creatorOptions.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => void applyTableFilters()}
+                disabled={tableLoading}
+                className="rounded-lg bg-slate-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                {tableLoading ? "Filtering..." : "Apply filters"}
+              </button>
+            </div>
+            <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+              Total Patients: {rows.length}
+            </div>
+          </div>
+          {loading || tableLoading ? (
             <div className="text-sm text-zinc-500">Loading...</div>
           ) : (
             <div className="overflow-auto">
               <table className="w-full border-separate border-spacing-0 text-xs">
                 <thead>
                   <tr className="text-left font-semibold text-zinc-600 dark:text-zinc-300">
+                    <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">#</th>
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Time</th>
+                    <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Created Date</th>
+                    <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Created By</th>
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Patient ID</th>
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Gender</th>
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Age</th>
@@ -1100,18 +1824,24 @@ export default function DoctorPage() {
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Cat</th>
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">WW</th>
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Disposition</th>
-                    <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Edit</th>
+                    <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => {
+                  {rows.map((r, idx) => {
                     const parsed = parseDoctorNotes(r.notes);
                     const dt = new Date(r.created_at);
                     const time = isNaN(dt.getTime()) ? "-" : `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+                    const createdDate = isNaN(dt.getTime())
+                      ? "-"
+                      : `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
                     const category = parsed.cat || (r.room === "room2" ? "Medical" : "Surgical");
                     return (
                       <tr key={r.id} className="border-t border-zinc-200 dark:border-zinc-800">
+                        <td className="px-3 py-2">{idx + 1}</td>
                         <td className="px-3 py-2">{time}</td>
+                        <td className="px-3 py-2">{createdDate}</td>
+                        <td className="px-3 py-2">{r.created_by && r.created_by.trim() ? r.created_by : "-"}</td>
                         <td className="px-3 py-2">{r.id_no}</td>
                         <td className="px-3 py-2">{r.sex === "M" ? "Male" : "Female"}</td>
                         <td className="px-3 py-2">{r.age}</td>
@@ -1120,7 +1850,25 @@ export default function DoctorPage() {
                         <td className="px-3 py-2">{category}</td>
                         <td className="px-3 py-2">{r.ww ? "Yes" : "No"}</td>
                         <td className="px-3 py-2">{parsed.disposition || "-"}</td>
-                        <td className="px-3 py-2 text-zinc-400">—</td>
+                        <td className="px-3 py-2">
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => startEditPatient(r)}
+                              className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold dark:border-zinc-800 dark:bg-zinc-900"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              disabled={deletingPatientId === r.id}
+                              onClick={() => void removePatient(r)}
+                              className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200 disabled:opacity-60"
+                            >
+                              {deletingPatientId === r.id ? "Deleting..." : "Delete"}
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}

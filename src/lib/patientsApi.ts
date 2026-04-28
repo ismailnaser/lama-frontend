@@ -9,6 +9,7 @@ export type Patient = {
   id_no: string;
   sex: Sex;
   age: number;
+  created_by?: string;
   room: "room1" | "room2" | null;
   ww: boolean;
   lab: boolean;

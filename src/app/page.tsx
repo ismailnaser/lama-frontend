@@ -839,8 +839,6 @@ export default function Home() {
   return (
     <div className="min-h-full flex-1 bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
       <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-        <PwaClient />
-
         {auditOpen ? (
           <div
             className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center"
@@ -2045,6 +2043,7 @@ export default function Home() {
                   <Download className="h-4 w-4" />
                   Export Excel
                 </button>
+                <PwaClient mode="header" />
               </div>
             ) : null}
           </div>

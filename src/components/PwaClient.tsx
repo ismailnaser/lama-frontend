@@ -3,7 +3,7 @@
 import { Pin, Share2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
-export function PwaClient() {
+export function PwaClient({ mode = "banner" }: { mode?: "banner" | "header" }) {
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
     navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined);
@@ -52,6 +52,21 @@ export function PwaClient() {
   }
 
   if (isStandalone) return null;
+
+  if (mode === "header") {
+    if (!deferred) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => void onInstallClick()}
+        className="inline-flex items-center gap-2 rounded-lg bg-slate-600 px-2 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 active:bg-slate-800"
+        title="Install app"
+      >
+        <Pin className="h-3.5 w-3.5" />
+        Install
+      </button>
+    );
+  }
 
   return (
     <div className="mb-3 flex flex-col gap-2">

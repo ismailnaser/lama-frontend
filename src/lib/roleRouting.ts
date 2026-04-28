@@ -1,7 +1,7 @@
 import type { AuthUser } from "./auth";
 
 export function isDoctorRole(role: AuthUser["role"]): boolean {
-  return role === "doctor" || role === "doctor_admin" || role === "admin";
+  return role === "doctor" || role === "doctor_admin";
 }
 
 export function isSectionAdmin(role: AuthUser["role"]): boolean {

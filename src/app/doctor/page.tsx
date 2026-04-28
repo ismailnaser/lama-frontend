@@ -317,7 +317,7 @@ export default function DoctorPage() {
               {canManageDoctorUsers ? (
                 <button
                   type="button"
-                  onClick={() => setAdminOpen((v) => !v)}
+                  onClick={() => setAdminOpen(true)}
                   disabled={adminLoading}
                   className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:active:bg-zinc-800"
                   title="Manage users"
@@ -511,11 +511,24 @@ export default function DoctorPage() {
         </div>
 
         {canManageDoctorUsers && adminOpen ? (
-          <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="mb-2 text-sm font-semibold">Doctor Admin — Create doctor users</div>
-            <p className="mb-3 text-xs text-zinc-600 dark:text-zinc-300">
-              You can create only <code>doctor</code> or <code>doctor_admin</code> accounts in this section.
-            </p>
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Doctor user management">
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setAdminOpen(false)}
+              aria-label="Close"
+            />
+            <div className="relative my-4 w-full max-w-5xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:my-0 sm:max-h-[85vh] sm:overflow-hidden">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="text-sm font-semibold">Doctor Admin — Manage users</div>
+              <button
+                type="button"
+                onClick={() => setAdminOpen(false)}
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:active:bg-zinc-800"
+              >
+                Close
+              </button>
+            </div>
             <div className="grid gap-2 sm:grid-cols-4">
               <input
                 value={adminCreate.name}
@@ -679,6 +692,7 @@ export default function DoctorPage() {
                   ) : null}
                 </tbody>
               </table>
+            </div>
             </div>
           </div>
         ) : null}

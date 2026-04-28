@@ -415,7 +415,7 @@ export default function Home() {
   }, [authReady, authUser, pathname, router]);
 
   const isDoctorSection = pathname === "/doctor";
-  const manageableRoleOptions = useMemo(() => {
+  const manageableRoleOptions = useMemo<Array<{ value: AdminUserRow["role"]; label: string }>>(() => {
     if (!authUser) return [] as Array<{ value: AdminUserRow["role"]; label: string }>;
     if (authUser.role === "admin") {
       return isDoctorSection
@@ -440,7 +440,7 @@ export default function Home() {
         { value: "nurse_admin", label: "nurse_admin" },
       ];
     }
-    return [] as Array<{ value: AdminUserRow["role"]; label: string }>;
+    return [];
   }, [authUser, isDoctorSection]);
 
   useEffect(() => {

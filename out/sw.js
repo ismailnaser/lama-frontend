@@ -1,5 +1,5 @@
 /* Surgical Dressing Log — offline shell cache */
-const CACHE = "sdl-app-v2";
+const CACHE = "sdl-app-v3";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -22,6 +22,14 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
+
+  // Don't let the SW interfere with cross-origin requests (API).
+  // This avoids stale localhost URLs and removes noisy "offline" errors for API fetches.
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   event.respondWith(
     caches.open(CACHE).then(async (cache) => {

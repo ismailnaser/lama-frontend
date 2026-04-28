@@ -15,17 +15,31 @@ import { createUser, deleteUser, listUsers, updateUser, type AdminUserRow } from
 import { isDoctorRole, isSectionAdmin } from "@/lib/roleRouting";
 import { Download, LogOut, Moon, Plus, Shield, Sun } from "lucide-react";
 
-type Disposition = "admission" | "discharge" | "observation" | "transfer" | "other";
+type Disposition = "discharged" | "admitted" | "referred_ed" | "referred_out";
+type AgeRange = "lt5" | "5to14" | "15to17" | "gte18";
 
 const DIAGNOSES = [
-  { no: 1, name: "Trauma", category: "Surgical" },
-  { no: 2, name: "Burn", category: "Surgical" },
-  { no: 3, name: "Wound Infection", category: "Surgical" },
-  { no: 4, name: "Abscess", category: "Surgical" },
-  { no: 5, name: "Post-op Follow-up", category: "Surgical" },
-  { no: 6, name: "Fracture", category: "OPD" },
-  { no: 7, name: "Soft Tissue Injury", category: "OPD" },
-  { no: 8, name: "Other", category: "OPD" },
+  { no: 1, name: "Respiratory Tract Infection", category: "Medical" },
+  { no: 2, name: "Acute Watery Diarrhea", category: "Medical" },
+  { no: 3, name: "Acute Bloody Diarrhea", category: "Medical" },
+  { no: 4, name: "Acute Viral Hepatitis", category: "Medical" },
+  { no: 5, name: "Other GI Diseases", category: "Medical" },
+  { no: 6, name: "Scabies", category: "Medical" },
+  { no: 7, name: "Skin Infection", category: "Medical" },
+  { no: 8, name: "Other Skin Diseases", category: "Medical" },
+  { no: 9, name: "Genitourinary Diseases", category: "Medical" },
+  { no: 10, name: "Musculoskeletal Diseases", category: "Medical" },
+  { no: 11, name: "Hypertension", category: "Medical" },
+  { no: 12, name: "Diabetes", category: "Medical" },
+  { no: 13, name: "Epilepsy", category: "Medical" },
+  { no: 14, name: "Eye Diseases", category: "Medical" },
+  { no: 15, name: "ENT Diseases", category: "Medical" },
+  { no: 16, name: "Other Medical Diseases", category: "Medical" },
+  { no: 17, name: "Fracture", category: "Surgical" },
+  { no: 18, name: "Burn", category: "Surgical" },
+  { no: 19, name: "Gunshot Wound (GSW)", category: "Surgical" },
+  { no: 20, name: "Other Wound", category: "Surgical" },
+  { no: 21, name: "Other Surgical", category: "Surgical" },
 ] as const;
 
 function pad2(n: number) {
@@ -42,6 +56,7 @@ function parseDoctorNotes(notes: string | null) {
   const parts = raw.split("|").map((x) => x.trim());
   const dxNoPart = parts.find((p) => p.startsWith("dx_no:")) ?? "";
   const dxPart = parts.find((p) => p.startsWith("dx:")) ?? "";
+  const catPart = parts.find((p) => p.startsWith("cat:")) ?? "";
   const dispositionPart = parts.find((p) => p.startsWith("disposition:")) ?? "";
   const customPart = parts.find((p) => p.startsWith("custom:")) ?? "";
   const dxNo = dxNoPart
@@ -55,6 +70,7 @@ function parseDoctorNotes(notes: string | null) {
   return {
     dxNo,
     dx,
+    cat: catPart.replace(/^cat:/, "").trim(),
     disposition: dispositionPart.replace(/^disposition:/, "").trim(),
     custom: customPart.replace(/^custom:/, "").trim(),
   };
@@ -74,10 +90,11 @@ export default function DoctorPage() {
 
   const [patientId, setPatientId] = useState("");
   const [sex, setSex] = useState<Sex>("M");
-  const [age, setAge] = useState("");
+  const [ageRange, setAgeRange] = useState<AgeRange | "">("");
+  const [keypadTarget, setKeypadTarget] = useState<"patientId">("patientId");
   const [selectedDx, setSelectedDx] = useState<number[]>([]);
   const [ww, setWw] = useState(false);
-  const [disposition, setDisposition] = useState<Disposition>("observation");
+  const [disposition, setDisposition] = useState<Disposition>("discharged");
   const [customNotes, setCustomNotes] = useState("");
   const [adminCreate, setAdminCreate] = useState({
     name: "",
@@ -100,19 +117,32 @@ export default function DoctorPage() {
   });
   const [userEditSaving, setUserEditSaving] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<"new" | "summary" | "tables">("new");
 
   function resetForm() {
     setPatientId("");
     setSex("M");
-    setAge("");
+    setAgeRange("");
     setSelectedDx([]);
     setWw(false);
-    setDisposition("observation");
+    setDisposition("discharged");
     setCustomNotes("");
   }
 
-  function appendPatientId(value: string) {
-    setPatientId((prev) => `${prev}${value}`);
+  function applyKeypadInput(value: string) {
+    const apply = (current: string, setter: (next: string) => void) => {
+      if (value === "CLR") {
+        setter("");
+        return;
+      }
+      if (value === "⌫") {
+        setter(current.slice(0, -1));
+        return;
+      }
+      setter(`${current}${value}`);
+    };
+
+    apply(patientId, setPatientId);
   }
 
   useEffect(() => {
@@ -227,19 +257,31 @@ export default function DoctorPage() {
     e.preventDefault();
     setError(null);
     const id = patientId.trim();
-    const ageNum = Number(age);
+    const ageNum = (() => {
+      if (ageRange === "lt5") return 4;
+      if (ageRange === "5to14") return 10;
+      if (ageRange === "15to17") return 16;
+      if (ageRange === "gte18") return 18;
+      return NaN;
+    })();
     if (!id) return setError("Patient ID is required.");
-    if (!Number.isFinite(ageNum) || ageNum < 0) return setError("Age must be a valid number.");
+    if (!Number.isFinite(ageNum)) return setError("Age range is required.");
     if (selectedDx.length === 0) return setError("Select at least one diagnosis.");
 
     const selectedDiagItems = DIAGNOSES.filter((d) => selectedDx.includes(d.no));
     const selectedDxNames = selectedDiagItems.map((d) => d.name);
     const selectedDxNos = selectedDiagItems.map((d) => d.no);
-    const hasOpdCategory = selectedDiagItems.some((d) => d.category === "OPD");
+    const hasMedicalCategory = selectedDiagItems.some((d) => d.category === "Medical");
+    const categoryText = selectedDiagItems.every((d) => d.category === "Medical")
+      ? "Medical"
+      : selectedDiagItems.every((d) => d.category === "Surgical")
+        ? "Surgical"
+        : "Mixed";
 
     const notesParts = [
       `dx_no:${selectedDxNos.join(",")}`,
       `dx:${selectedDxNames.join(",")}`,
+      `cat:${categoryText}`,
       `disposition:${disposition}`,
       customNotes.trim() ? `custom:${customNotes.trim()}` : "",
     ].filter(Boolean);
@@ -250,7 +292,7 @@ export default function DoctorPage() {
         id_no: id,
         sex,
         age: ageNum,
-        room: hasOpdCategory ? "room2" : "room1",
+        room: hasMedicalCategory ? "room2" : "room1",
         ww,
         notes: notesParts.join(" | "),
       });
@@ -374,24 +416,70 @@ export default function DoctorPage() {
           </div>
         </div>
 
+        <div className="mb-4 inline-flex items-center gap-1 rounded-xl border border-zinc-200 bg-white p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <button
+            type="button"
+            onClick={() => setActiveSection("new")}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+              activeSection === "new"
+                ? "bg-slate-600 text-white"
+                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            }`}
+          >
+            New
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSection("summary")}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+              activeSection === "summary"
+                ? "bg-slate-600 text-white"
+                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            }`}
+          >
+            Today Summary
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSection("tables")}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+              activeSection === "tables"
+                ? "bg-slate-600 text-white"
+                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            }`}
+          >
+            Tables
+          </button>
+        </div>
+
         <div className="grid gap-4 lg:grid-cols-3">
-          <form onSubmit={onSubmit} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 lg:col-span-2">
+          <form
+            onSubmit={onSubmit}
+            className={`rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 lg:col-span-2 ${
+              activeSection === "new" ? "" : "hidden"
+            }`}
+          >
             <div className="mb-3 text-sm font-semibold">New / Edit Today&apos;s Summary</div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Patient ID</label>
-                <input value={patientId} onChange={(e) => setPatientId(e.target.value)} className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950" />
-                <div className="mt-2 grid grid-cols-4 gap-1">
+                <input
+                  value={patientId}
+                  onFocus={() => setKeypadTarget("patientId")}
+                  onChange={(e) => setPatientId(e.target.value)}
+                  className={`mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm dark:bg-zinc-950 ${
+                    keypadTarget === "patientId"
+                      ? "border-slate-500 dark:border-slate-500"
+                      : "border-zinc-200 dark:border-zinc-800"
+                  }`}
+                />
+                <div className="mt-2 grid grid-cols-3 gap-1">
                   {["1", "2", "3", "4", "5", "6", "7", "8", "9", "CLR", "0", "⌫"].map((k) => (
                     <button
                       key={k}
                       type="button"
-                      onClick={() => {
-                        if (k === "CLR") return setPatientId("");
-                        if (k === "⌫") return setPatientId((prev) => prev.slice(0, -1));
-                        appendPatientId(k);
-                      }}
+                      onClick={() => applyKeypadInput(k)}
                       className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs font-semibold dark:border-zinc-800 dark:bg-zinc-950"
                     >
                       {k}
@@ -400,28 +488,86 @@ export default function DoctorPage() {
                 </div>
               </div>
               <div>
-                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Age</label>
-                <input value={age} onChange={(e) => setAge(e.target.value)} type="number" min={0} className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950" />
+                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Age Range</label>
+                <div className="mt-1 grid grid-cols-2 gap-1">
+                  {[
+                    { id: "lt5", label: "Less than 5" },
+                    { id: "5to14", label: "5 to 14" },
+                    { id: "15to17", label: "15 to 17" },
+                    { id: "gte18", label: "18 or more" },
+                  ].map((opt) => {
+                    const selected = ageRange === (opt.id as AgeRange);
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setAgeRange(opt.id as AgeRange)}
+                        className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+                          selected
+                            ? "border-slate-600 bg-slate-600 text-white"
+                            : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Gender</label>
-                <select value={sex} onChange={(e) => setSex(e.target.value as Sex)} className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950">
-                  <option value="M">Male</option>
-                  <option value="F">Female</option>
-                </select>
+                <div className="mt-1 grid grid-cols-2 gap-1">
+                  {[
+                    { id: "M", label: "Male" },
+                    { id: "F", label: "Female" },
+                  ].map((opt) => {
+                    const selected = sex === (opt.id as Sex);
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setSex(opt.id as Sex)}
+                        className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+                          selected
+                            ? "border-slate-600 bg-slate-600 text-white"
+                            : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div>
                 <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Disposition</label>
-                <select value={disposition} onChange={(e) => setDisposition(e.target.value as Disposition)} className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950">
-                  <option value="admission">Admission</option>
-                  <option value="discharge">Discharge</option>
-                  <option value="observation">Observation</option>
-                  <option value="transfer">Transfer</option>
-                  <option value="other">Other</option>
-                </select>
+                <div className="mt-1 grid grid-cols-2 gap-1">
+                  {[
+                    { id: "discharged", label: "Discharged" },
+                    { id: "admitted", label: "Admitted" },
+                    { id: "referred_ed", label: "Referred to ED" },
+                    { id: "referred_out", label: "Referred out" },
+                  ].map((opt) => {
+                    const selected = disposition === (opt.id as Disposition);
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setDisposition(opt.id as Disposition)}
+                        className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+                          selected
+                            ? "border-slate-600 bg-slate-600 text-white"
+                            : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -474,7 +620,11 @@ export default function DoctorPage() {
             </div>
           </form>
 
-          <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div
+            className={`rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${
+              activeSection === "summary" ? "" : "hidden"
+            }`}
+          >
             <div className="text-sm font-semibold">Today stats</div>
             <div className="mt-2 space-y-1 text-sm">
               <div>Total: {stats.total}</div>
@@ -814,7 +964,11 @@ export default function DoctorPage() {
           </div>
         ) : null}
 
-        <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div
+          className={`mt-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${
+            activeSection === "tables" ? "" : "hidden"
+          }`}
+        >
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="text-sm font-semibold">All Data / Export</div>
             <div className="flex gap-2">
@@ -862,7 +1016,7 @@ export default function DoctorPage() {
                     const parsed = parseDoctorNotes(r.notes);
                     const dt = new Date(r.created_at);
                     const time = isNaN(dt.getTime()) ? "-" : `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
-                    const category = r.room === "room2" ? "OPD" : "Surgical";
+                    const category = parsed.cat || (r.room === "room2" ? "Medical" : "Surgical");
                     return (
                       <tr key={r.id} className="border-t border-zinc-200 dark:border-zinc-800">
                         <td className="px-3 py-2">{time}</td>

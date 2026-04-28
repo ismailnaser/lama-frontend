@@ -418,15 +418,10 @@ export default function Home() {
   const manageableRoleOptions = useMemo<Array<{ value: AdminUserRow["role"]; label: string }>>(() => {
     if (!authUser) return [] as Array<{ value: AdminUserRow["role"]; label: string }>;
     if (authUser.role === "admin") {
-      return isDoctorSection
-        ? [
-            { value: "doctor", label: "doctor" },
-            { value: "doctor_admin", label: "doctor_admin" },
-          ]
-        : [
-            { value: "nurse", label: "nurse" },
-            { value: "nurse_admin", label: "nurse_admin" },
-          ];
+      return [
+        { value: "nurse", label: "nurse" },
+        { value: "nurse_admin", label: "nurse_admin" },
+      ];
     }
     if (authUser.role === "doctor_admin") {
       return [

@@ -11,7 +11,7 @@ import {
   type Patient,
   type Sex,
 } from "@/lib/patientsApi";
-import { createUser } from "@/lib/usersApi";
+import { createUser, deleteUser, listUsers, updateUser, type AdminUserRow } from "@/lib/usersApi";
 import { isDoctorRole, isSectionAdmin } from "@/lib/roleRouting";
 
 type Disposition = "admission" | "discharge" | "observation" | "transfer" | "other";
@@ -85,6 +85,9 @@ export default function DoctorPage() {
   });
   const [adminSaving, setAdminSaving] = useState(false);
   const [adminError, setAdminError] = useState<string | null>(null);
+  const [adminUsers, setAdminUsers] = useState<AdminUserRow[]>([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const canManageDoctorUsers = authUser?.role === "doctor_admin";
 
   function resetForm() {
     setPatientId("");
@@ -147,6 +150,11 @@ export default function DoctorPage() {
   }, [authReady, authUser]);
 
   useEffect(() => {
+    if (!authReady || !authUser || !canManageDoctorUsers) return;
+    void reloadAdminUsers();
+  }, [authReady, authUser, canManageDoctorUsers]);
+
+  useEffect(() => {
     if (!toast) return;
     const id = window.setTimeout(() => setToast(null), 2200);
     return () => window.clearTimeout(id);
@@ -178,7 +186,19 @@ export default function DoctorPage() {
     }));
     return { total, male, female, wwCount, nonWw, topDx, ageBreakdown };
   }, [rows]);
-  const canManageDoctorUsers = authUser?.role === "doctor_admin" || authUser?.role === "admin";
+  async function reloadAdminUsers() {
+    if (!canManageDoctorUsers) return;
+    setAdminLoading(true);
+    setAdminError(null);
+    try {
+      const users = await listUsers();
+      setAdminUsers(users.filter((u) => u.role === "doctor" || u.role === "doctor_admin"));
+    } catch (e) {
+      setAdminError(e instanceof Error ? e.message : "Failed to load users.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -467,6 +487,7 @@ export default function DoctorPage() {
                       role: adminCreate.role,
                     });
                     setAdminCreate({ name: "", username: "", password: "", role: "doctor" });
+                    await reloadAdminUsers();
                     setToast("Doctor account created.");
                   } catch (e) {
                     setAdminError(e instanceof Error ? e.message : "Failed to create account.");
@@ -483,6 +504,79 @@ export default function DoctorPage() {
                   {adminError}
                 </div>
               ) : null}
+            </div>
+
+            <div className="mt-4 overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+              <table className="w-full border-separate border-spacing-0 text-xs">
+                <thead>
+                  <tr className="text-left font-semibold text-zinc-600 dark:text-zinc-300">
+                    <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Username</th>
+                    <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Name</th>
+                    <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Role</th>
+                    <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Status</th>
+                    <th className="sticky top-0 bg-zinc-100 px-3 py-2 text-right dark:bg-zinc-800/70">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminUsers.map((u) => (
+                    <tr key={u.id} className="border-t border-zinc-200 dark:border-zinc-800">
+                      <td className="px-3 py-2 font-semibold">{u.username}</td>
+                      <td className="px-3 py-2">{u.name}</td>
+                      <td className="px-3 py-2">{u.role}</td>
+                      <td className="px-3 py-2">{u.is_active ? "Active" : "Disabled"}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            disabled={adminLoading || u.id === authUser.id}
+                            onClick={async () => {
+                              setAdminLoading(true);
+                              setAdminError(null);
+                              try {
+                                await updateUser(u.id, { is_active: !u.is_active });
+                                await reloadAdminUsers();
+                              } catch (e) {
+                                setAdminError(e instanceof Error ? e.message : "Failed to update user.");
+                              } finally {
+                                setAdminLoading(false);
+                              }
+                            }}
+                            className="rounded-md border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900"
+                          >
+                            {u.is_active ? "Disable" : "Enable"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={adminLoading || u.id === authUser.id}
+                            onClick={async () => {
+                              setAdminLoading(true);
+                              setAdminError(null);
+                              try {
+                                await deleteUser(u.id);
+                                await reloadAdminUsers();
+                              } catch (e) {
+                                setAdminError(e instanceof Error ? e.message : "Failed to delete user.");
+                              } finally {
+                                setAdminLoading(false);
+                              }
+                            }}
+                            className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {adminUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-4 text-center text-zinc-500">
+                        {adminLoading ? "Loading users..." : "No doctor users found."}
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
             </div>
           </div>
         ) : null}

@@ -17,12 +17,19 @@ import { Download, LogOut, Moon, Plus, Shield, Sun } from "lucide-react";
 
 type Disposition = "discharged" | "admitted" | "referred_ed" | "referred_out";
 type AgeRange = "lt5" | "5to14" | "15to17" | "gte18";
+type InfectionChoice =
+  | "acute_viral_hepatitis"
+  | "mumps"
+  | "chicken_pox"
+  | "measles"
+  | "menningits"
+  | "other";
 
 const DIAGNOSES = [
   { no: 1, name: "Respiratory Tract Infection", category: "Medical" },
   { no: 2, name: "Acute Watery Diarrhea", category: "Medical" },
   { no: 3, name: "Acute Bloody Diarrhea", category: "Medical" },
-  { no: 4, name: "Acute Viral Hepatitis", category: "Medical" },
+  { no: 4, name: "Infections Disease", category: "Medical" },
   { no: 5, name: "Other GI Diseases", category: "Medical" },
   { no: 6, name: "Scabies", category: "Medical" },
   { no: 7, name: "Skin Infection", category: "Medical" },
@@ -40,6 +47,7 @@ const DIAGNOSES = [
   { no: 19, name: "Gunshot Wound (GSW)", category: "Surgical" },
   { no: 20, name: "Other Wound", category: "Surgical" },
   { no: 21, name: "Other Surgical", category: "Surgical" },
+  { no: 22, name: "Dental", category: "Medical" },
 ] as const;
 
 function pad2(n: number) {
@@ -93,6 +101,8 @@ export default function DoctorPage() {
   const [ageRange, setAgeRange] = useState<AgeRange | "">("");
   const [keypadTarget, setKeypadTarget] = useState<"patientId">("patientId");
   const [selectedDx, setSelectedDx] = useState<number[]>([]);
+  const [infectionChoice, setInfectionChoice] = useState<InfectionChoice | "">("");
+  const [infectionOtherText, setInfectionOtherText] = useState("");
   const [ww, setWw] = useState(false);
   const [disposition, setDisposition] = useState<Disposition>("discharged");
   const [customNotes, setCustomNotes] = useState("");
@@ -118,12 +128,18 @@ export default function DoctorPage() {
   const [userEditSaving, setUserEditSaving] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<"new" | "summary" | "tables">("new");
+  const hasSelectedSurgical = selectedDx.some((no) => {
+    const d = DIAGNOSES.find((x) => x.no === no);
+    return d?.category === "Surgical";
+  });
 
   function resetForm() {
     setPatientId("");
     setSex("M");
     setAgeRange("");
     setSelectedDx([]);
+    setInfectionChoice("");
+    setInfectionOtherText("");
     setWw(false);
     setDisposition("discharged");
     setCustomNotes("");
@@ -213,6 +229,10 @@ export default function DoctorPage() {
     return () => window.clearTimeout(id);
   }, [toast]);
 
+  useEffect(() => {
+    if (!hasSelectedSurgical && ww) setWw(false);
+  }, [hasSelectedSurgical, ww]);
+
   const stats = useMemo(() => {
     const total = rows.length;
     const male = rows.filter((r) => r.sex === "M").length;
@@ -267,9 +287,26 @@ export default function DoctorPage() {
     if (!id) return setError("Patient ID is required.");
     if (!Number.isFinite(ageNum)) return setError("Age range is required.");
     if (selectedDx.length === 0) return setError("Select at least one diagnosis.");
+    if (selectedDx.includes(4) && !infectionChoice) {
+      return setError("Please select infection disease type.");
+    }
+    if (selectedDx.includes(4) && infectionChoice === "other" && !infectionOtherText.trim()) {
+      return setError("Please write the infection disease name in Other.");
+    }
 
     const selectedDiagItems = DIAGNOSES.filter((d) => selectedDx.includes(d.no));
-    const selectedDxNames = selectedDiagItems.map((d) => d.name);
+    const infectionLabel = (() => {
+      if (infectionChoice === "acute_viral_hepatitis") return "Acute Viral Hepatitis";
+      if (infectionChoice === "mumps") return "Mumps";
+      if (infectionChoice === "chicken_pox") return "Chicken pox";
+      if (infectionChoice === "measles") return "Measles";
+      if (infectionChoice === "menningits") return "Menningits";
+      if (infectionChoice === "other") return `Other: ${infectionOtherText.trim()}`;
+      return "";
+    })();
+    const selectedDxNames = selectedDiagItems.map((d) =>
+      d.no === 4 && infectionLabel ? `Infections Disease (${infectionLabel})` : d.name
+    );
     const selectedDxNos = selectedDiagItems.map((d) => d.no);
     const hasMedicalCategory = selectedDiagItems.some((d) => d.category === "Medical");
     const categoryText = selectedDiagItems.every((d) => d.category === "Medical")
@@ -582,25 +619,80 @@ export default function DoctorPage() {
                       type="button"
                       onClick={() => {
                         setSelectedDx((prev) => {
-                          if (prev.includes(d.no)) return prev.filter((x) => x !== d.no);
-                          if (prev.length >= 2) return prev;
+                          if (prev.includes(d.no)) {
+                            if (d.no === 4) {
+                              setInfectionChoice("");
+                              setInfectionOtherText("");
+                            }
+                            return prev.filter((x) => x !== d.no);
+                          }
+                          if (prev.length >= 2) return [prev[1], d.no];
                           return [...prev, d.no];
                         });
                       }}
                       className={`rounded-xl border px-3 py-2 text-xs font-semibold ${selected ? "border-slate-600 bg-slate-600 text-white" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"}`}
                     >
-                      {d.no}. {d.name}
+                      <div>{d.no}. {d.name}</div>
+                      <div className={`mt-1 text-[10px] font-medium ${selected ? "text-slate-100/90" : "text-zinc-500 dark:text-zinc-400"}`}>
+                        {d.category}
+                      </div>
                     </button>
                   );
                 })}
               </div>
             </div>
 
+            {selectedDx.includes(4) ? (
+              <div className="mt-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+                <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                  Infection Disease Type
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {[
+                    { id: "acute_viral_hepatitis", label: "Acute Viral Hepatitis" },
+                    { id: "mumps", label: "Mumps" },
+                    { id: "chicken_pox", label: "Chicken pox" },
+                    { id: "measles", label: "Measles" },
+                    { id: "menningits", label: "Menningits" },
+                    { id: "other", label: "Other" },
+                  ].map((opt) => {
+                    const selected = infectionChoice === (opt.id as InfectionChoice);
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setInfectionChoice(opt.id as InfectionChoice)}
+                        className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+                          selected
+                            ? "border-slate-600 bg-slate-600 text-white"
+                            : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {infectionChoice === "other" ? (
+                  <input
+                    value={infectionOtherText}
+                    onChange={(e) => setInfectionOtherText(e.target.value)}
+                    placeholder="Write rare infection disease..."
+                    className="mt-2 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                  />
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950">
-                <span>War Wounded?</span>
-                <input type="checkbox" checked={ww} onChange={(e) => setWw(e.target.checked)} />
-              </label>
+              {hasSelectedSurgical ? (
+                <label className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950">
+                  <span>WW</span>
+                  <input type="checkbox" checked={ww} onChange={(e) => setWw(e.target.checked)} />
+                </label>
+              ) : (
+                <div />
+              )}
               <input value={customNotes} onChange={(e) => setCustomNotes(e.target.value)} placeholder="Optional notes" className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950" />
             </div>
 

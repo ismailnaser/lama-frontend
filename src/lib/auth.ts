@@ -3,7 +3,7 @@ export type AuthUser = {
   name: string;
   username: string;
   email: string;
-  role: "admin" | "user";
+  role: "admin" | "user" | "doctor" | "doctor_admin" | "nurse" | "nurse_admin";
   is_active?: boolean;
 };
 

@@ -15,7 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   createPatient,
   exportPatientsExcel,
@@ -34,6 +34,7 @@ import { fetchCurrentUser, logout } from "@/lib/authApi";
 import { getAuthToken, setAuthToken, type AuthUser } from "@/lib/auth";
 import { createUser, deleteUser, listUsers, updateUser, type AdminUserRow } from "@/lib/usersApi";
 import { PatientAuditDetails } from "@/lib/patientAuditDetails";
+import { isDoctorRole, isSectionAdmin } from "@/lib/roleRouting";
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -218,6 +219,7 @@ function formatDayMonthWordYear(isoLike: string) {
 
 export default function Home() {
   const router = useRouter();
+  const pathname = usePathname();
   // Fixed default on server + first client pass so SSR/static HTML matches hydration;
   // real preference is applied in useLayoutEffect (localStorage).
   const [theme, setTheme] = useState<"light" | "dark">("dark");
@@ -309,7 +311,7 @@ export default function Home() {
     name: "",
     username: "",
     password: "",
-    role: "user" as "user" | "admin",
+    role: "nurse" as AdminUserRow["role"],
   });
 
   const [userEditing, setUserEditing] = useState<null | AdminUserRow>(null);
@@ -318,7 +320,7 @@ export default function Home() {
     username: "",
     email: "",
     password: "",
-    role: "user" as "user" | "admin",
+    role: "nurse" as AdminUserRow["role"],
     is_active: true,
   });
   const [userEditSaving, setUserEditSaving] = useState(false);
@@ -399,6 +401,55 @@ export default function Home() {
       cancelled = true;
     };
   }, [router]);
+
+  useEffect(() => {
+    if (!authReady || !authUser) return;
+    const doctor = isDoctorRole(authUser.role);
+    if (doctor && pathname !== "/doctor") {
+      router.replace("/doctor");
+      return;
+    }
+    if (!doctor && pathname === "/doctor") {
+      router.replace("/");
+    }
+  }, [authReady, authUser, pathname, router]);
+
+  const isDoctorSection = pathname === "/doctor";
+  const manageableRoleOptions = useMemo(() => {
+    if (!authUser) return [] as Array<{ value: AdminUserRow["role"]; label: string }>;
+    if (authUser.role === "admin") {
+      return isDoctorSection
+        ? [
+            { value: "doctor", label: "doctor" },
+            { value: "doctor_admin", label: "doctor_admin" },
+          ]
+        : [
+            { value: "nurse", label: "nurse" },
+            { value: "nurse_admin", label: "nurse_admin" },
+          ];
+    }
+    if (authUser.role === "doctor_admin") {
+      return [
+        { value: "doctor", label: "doctor" },
+        { value: "doctor_admin", label: "doctor_admin" },
+      ];
+    }
+    if (authUser.role === "nurse_admin") {
+      return [
+        { value: "nurse", label: "nurse" },
+        { value: "nurse_admin", label: "nurse_admin" },
+      ];
+    }
+    return [] as Array<{ value: AdminUserRow["role"]; label: string }>;
+  }, [authUser, isDoctorSection]);
+
+  useEffect(() => {
+    if (manageableRoleOptions.length === 0) return;
+    const allowed = manageableRoleOptions.some((opt) => opt.value === createUserForm.role);
+    if (!allowed) {
+      setCreateUserForm((prev) => ({ ...prev, role: manageableRoleOptions[0].value }));
+    }
+  }, [createUserForm.role, manageableRoleOptions]);
 
   const effectiveFilters = useMemo((): PatientFilters => {
     const completed = completeYmdRange(dateRange);
@@ -653,7 +704,7 @@ export default function Home() {
   }
 
   async function openAudits(patient: Patient) {
-    if (authUser?.role !== "admin") return;
+    if (!authUser || !isSectionAdmin(authUser.role)) return;
     setAuditLoading(true);
     try {
       const logs = await getPatientAudits(patient.id);
@@ -918,12 +969,15 @@ export default function Home() {
                       <select
                         value={createUserForm.role}
                         onChange={(e) =>
-                          setCreateUserForm((p) => ({ ...p, role: e.target.value as "user" | "admin" }))
+                          setCreateUserForm((p) => ({ ...p, role: e.target.value as AdminUserRow["role"] }))
                         }
                         className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
                       >
-                        <option value="user">user</option>
-                        <option value="admin">admin</option>
+                        {manageableRoleOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
                       </select>
 
                       <button
@@ -940,7 +994,12 @@ export default function Home() {
                               role: createUserForm.role,
                             });
                             await reloadAdminUsers();
-                            setCreateUserForm({ name: "", username: "", password: "", role: "user" });
+                            setCreateUserForm((prev) => ({
+                              name: "",
+                              username: "",
+                              password: "",
+                              role: manageableRoleOptions[0]?.value ?? prev.role,
+                            }));
                             showToast("success", "User created.");
                           } catch (e) {
                             const msg = e instanceof Error ? e.message : "Create failed";
@@ -1137,13 +1196,19 @@ export default function Home() {
                     <select
                       value={userEditForm.role}
                       onChange={(e) =>
-                        setUserEditForm((p) => ({ ...p, role: e.target.value as "user" | "admin" }))
+                        setUserEditForm((p) => ({ ...p, role: e.target.value as AdminUserRow["role"] }))
                       }
-                      disabled={userEditing.id === authUser.id && userEditing.role === "admin"}
+                      disabled={
+                        (userEditing.id === authUser.id && isSectionAdmin(userEditing.role)) ||
+                        manageableRoleOptions.length === 0
+                      }
                       className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none shadow-sm focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
                     >
-                      <option value="user">user</option>
-                      <option value="admin">admin</option>
+                      {manageableRoleOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="flex items-end">
@@ -1178,8 +1243,12 @@ export default function Home() {
                       showToast("error", "You cannot disable your own account.");
                       return;
                     }
-                    if (userEditing.id === authUser.id && userEditForm.role === "user" && userEditing.role === "admin") {
-                      showToast("error", "You cannot demote your own admin account here.");
+                    if (
+                      userEditing.id === authUser.id &&
+                      isSectionAdmin(userEditing.role) &&
+                      userEditForm.role !== userEditing.role
+                    ) {
+                      showToast("error", "You cannot demote your own section admin account here.");
                       return;
                     }
 
@@ -1916,12 +1985,12 @@ export default function Home() {
             {authUser ? (
               <div className="inline-flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <span className="font-semibold">{authUser.username}</span>
-                {authUser.role === "admin" ? (
+                {isSectionAdmin(authUser.role) ? (
                   <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-100">
                     <Shield className="h-3 w-3" /> admin
                   </span>
                 ) : null}
-                {authUser.role === "admin" ? (
+                {isSectionAdmin(authUser.role) ? (
                   <button
                     type="button"
                     onClick={() => void openAdmin()}
@@ -2521,7 +2590,7 @@ export default function Home() {
                           </td>
                           <td className="w-[84px] px-2 py-2 align-top sm:w-[104px] sm:px-4 sm:py-3 border-r border-zinc-200 dark:border-zinc-800">
                             <div className="flex justify-end gap-2 whitespace-nowrap text-zinc-700 dark:text-zinc-200">
-                              {authUser.role === "admin" ? (
+                              {isSectionAdmin(authUser.role) ? (
                                 <button
                                   type="button"
                                   disabled={auditLoading}

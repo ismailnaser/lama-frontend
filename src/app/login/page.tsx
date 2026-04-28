@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { login } from "@/lib/authApi";
+import { getLandingPathForRole } from "@/lib/roleRouting";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,8 +17,8 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      await login(username, password);
-      router.replace("/");
+      const user = await login(username, password);
+      router.replace(getLandingPathForRole(user.role));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {

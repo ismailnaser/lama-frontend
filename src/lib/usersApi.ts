@@ -7,7 +7,7 @@ export type AdminUserRow = {
   name: string;
   username: string;
   email: string | null;
-  role: "admin" | "user";
+  role: "admin" | "user" | "doctor" | "doctor_admin" | "nurse" | "nurse_admin";
   is_active: boolean;
   created_at: string;
 };
@@ -26,7 +26,7 @@ export async function createUser(input: {
   name: string;
   username: string;
   password: string;
-  role: "admin" | "user";
+  role: AdminUserRow["role"];
   email?: string | null;
 }) {
   const res = await apiFetch(`${API_BASE_URL}/users`, {
@@ -48,7 +48,7 @@ export async function updateUser(
     name: string;
     username: string;
     password: string;
-    role: "admin" | "user";
+    role: AdminUserRow["role"];
     email: string | null;
     is_active: boolean;
   }>

@@ -494,9 +494,10 @@ export default function DoctorPage() {
 
   useEffect(() => {
     if (!authReady || !authUser || activeSection !== "tables") return;
+    if (showRegisteredCasesTotal) return;
     void applyTableFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authReady, authUser, activeSection, tableMode, tableRefDate, tableFromDate, tableToDate, tableCreator, tableMineOnly]);
+  }, [authReady, authUser, activeSection, tableMode, tableRefDate, tableFromDate, tableToDate, tableCreator, tableMineOnly, showRegisteredCasesTotal]);
 
   useEffect(() => {
     if (!authReady || !authUser || activeSection !== "summary") return;
@@ -909,14 +910,15 @@ export default function DoctorPage() {
   async function toggleRegisteredCasesTotal() {
     if (showRegisteredCasesTotal) {
       setShowRegisteredCasesTotal(false);
+      await applyTableFilters();
       return;
     }
     setShowRegisteredCasesTotal(true);
-    if (registeredCasesTotal !== null) return;
     setRegisteredCasesLoading(true);
     try {
-      const total = await getPatientsCount();
+      const [total, allRows] = await Promise.all([getPatientsCount(), listPatients({})]);
       setRegisteredCasesTotal(total);
+      setRows(allRows);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load total registered cases.");
     } finally {
@@ -1371,23 +1373,23 @@ export default function DoctorPage() {
               <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Showing: {summaryLabel}</div>
             </div>
 
-            <div className="overflow-x-auto">
-              <div className="grid min-w-[720px] grid-cols-4 gap-3">
-                <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
-                <div className="text-xs text-zinc-500 dark:text-zinc-400">Total</div>
-                <div className="text-2xl font-extrabold">{stats.total}</div>
+            <div>
+              <div className="grid grid-cols-4 gap-2 sm:gap-3">
+                <div className="min-w-0 rounded-xl border border-zinc-200 p-2 sm:p-3 dark:border-zinc-800">
+                <div className="truncate text-[11px] text-zinc-500 dark:text-zinc-400 sm:text-xs">Total</div>
+                <div className="text-lg font-extrabold sm:text-2xl">{stats.total}</div>
                 </div>
-                <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
-                <div className="text-xs text-zinc-500 dark:text-zinc-400">Male</div>
-                <div className="text-2xl font-extrabold">{stats.male}</div>
+                <div className="min-w-0 rounded-xl border border-zinc-200 p-2 sm:p-3 dark:border-zinc-800">
+                <div className="truncate text-[11px] text-zinc-500 dark:text-zinc-400 sm:text-xs">Male</div>
+                <div className="text-lg font-extrabold sm:text-2xl">{stats.male}</div>
                 </div>
-                <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
-                <div className="text-xs text-zinc-500 dark:text-zinc-400">Female</div>
-                <div className="text-2xl font-extrabold">{stats.female}</div>
+                <div className="min-w-0 rounded-xl border border-zinc-200 p-2 sm:p-3 dark:border-zinc-800">
+                <div className="truncate text-[11px] text-zinc-500 dark:text-zinc-400 sm:text-xs">Female</div>
+                <div className="text-lg font-extrabold sm:text-2xl">{stats.female}</div>
                 </div>
-                <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
-                <div className="text-xs text-zinc-500 dark:text-zinc-400">Surgical WW/Non</div>
-                <div className="text-2xl font-extrabold">
+                <div className="min-w-0 rounded-xl border border-zinc-200 p-2 sm:p-3 dark:border-zinc-800">
+                <div className="truncate text-[11px] text-zinc-500 dark:text-zinc-400 sm:text-xs">Surgical WW/Non</div>
+                <div className="text-lg font-extrabold sm:text-2xl">
                   {stats.wwCount}/{stats.nonWw}
                 </div>
               </div>
@@ -2161,6 +2163,8 @@ export default function DoctorPage() {
                 >
                   monthly
                 </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setTableMode("range")}
@@ -2172,8 +2176,6 @@ export default function DoctorPage() {
                 >
                   custom range
                 </button>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
                 {tableMode === "range" ? (
                   <>
                     <input
@@ -2249,7 +2251,7 @@ export default function DoctorPage() {
                       : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
                   }`}
                 >
-                  Registered cases total
+                  All cases
                 </button>
               </div>
             </div>
@@ -2283,7 +2285,7 @@ export default function DoctorPage() {
                   {showRegisteredCasesTotal ? (
                     <tr className="border-t border-zinc-200 bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900/40">
                       <td colSpan={tableColSpan} className="px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-                        Total registered cases (all days):{" "}
+                        All registered cases (all days):{" "}
                         {registeredCasesLoading ? "Loading..." : (registeredCasesTotal ?? rows.length)}
                       </td>
                     </tr>

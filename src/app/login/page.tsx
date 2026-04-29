@@ -31,7 +31,7 @@ export default function LoginPage() {
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-between px-4 py-10 sm:px-6">
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <div className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Surgical Dressing Log
+            Dressing and OPD
           </div>
           <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Sign in to continue</div>
 

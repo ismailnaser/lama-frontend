@@ -14,12 +14,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Dressing+OPD",
-  description: "Surgical dressing log — install for offline use.",
+  title: "Dressing and OPD",
+  description: "Dressing and OPD — install for offline use.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "Dressing Log",
+    title: "Dressing and OPD",
     statusBarStyle: "default",
   },
 };

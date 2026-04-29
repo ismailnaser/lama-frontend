@@ -8,7 +8,6 @@ import { getAuthToken, setAuthToken, type AuthUser } from "@/lib/auth";
 import {
   createPatient,
   deletePatient,
-  exportPatientsExcel,
   listPatients,
   updatePatient,
   type Patient,
@@ -16,6 +15,7 @@ import {
 } from "@/lib/patientsApi";
 import { createUser, deleteUser, listUsers, updateUser, type AdminUserRow } from "@/lib/usersApi";
 import { isDoctorRole, isSectionAdmin } from "@/lib/roleRouting";
+import { exportStyledExcel } from "@/lib/excelExport";
 import { Download, LogOut, Moon, Plus, Shield, Sun } from "lucide-react";
 
 type Disposition = "discharged" | "admitted" | "referred_ed" | "referred_out";
@@ -152,11 +152,12 @@ export default function DoctorPage() {
   const [summaryFrom, setSummaryFrom] = useState(todayYmd());
   const [summaryTo, setSummaryTo] = useState(todayYmd());
   const [summaryExporting, setSummaryExporting] = useState(false);
-  const [tableMode, setTableMode] = useState<"daily" | "weakly" | "monthly" | "range">("daily");
+  const [tableMode, setTableMode] = useState<"daily" | "weekly" | "monthly" | "range">("daily");
   const [tableRefDate, setTableRefDate] = useState(todayYmd());
   const [tableFromDate, setTableFromDate] = useState(todayYmd());
   const [tableToDate, setTableToDate] = useState(todayYmd());
   const [tableCreator, setTableCreator] = useState("all");
+  const [tableMineOnly, setTableMineOnly] = useState(false);
   const [tableLoading, setTableLoading] = useState(false);
   const [tableExporting, setTableExporting] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -164,6 +165,7 @@ export default function DoctorPage() {
   const [pendingItems, setPendingItems] = useState<PendingDoctorCreate[]>([]);
   const [editingPatientId, setEditingPatientId] = useState<number | null>(null);
   const [deletingPatientId, setDeletingPatientId] = useState<number | null>(null);
+  const [deleteConfirmPatient, setDeleteConfirmPatient] = useState<Patient | null>(null);
 
   const [patientId, setPatientId] = useState("");
   const [sex, setSex] = useState<Sex>("M");
@@ -195,11 +197,13 @@ export default function DoctorPage() {
   });
   const [userEditSaving, setUserEditSaving] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<"new" | "summary" | "tables">("new");
   const hasSelectedSurgical = selectedDx.some((no) => {
     const d = DIAGNOSES.find((x) => x.no === no);
     return d?.category === "Surgical";
   });
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
   function resetForm() {
     setPatientId("");
@@ -284,7 +288,7 @@ export default function DoctorPage() {
       const d = tableRefDate || todayYmd();
       return { from: d, to: d };
     }
-    if (tableMode === "weakly") {
+    if (tableMode === "weekly") {
       const d = tableRefDate || todayYmd();
       return { from: startOfWeekSaturday(d), to: d };
     }
@@ -302,10 +306,16 @@ export default function DoctorPage() {
     setError(null);
     try {
       const data = await listPatients({ from_date: from, to_date: to });
+      const creatorFilter =
+        authUser?.role === "doctor_admin"
+          ? tableCreator
+          : tableMineOnly
+            ? authUser?.username ?? "__none__"
+            : "all";
       const filtered =
-        tableCreator === "all"
+        creatorFilter === "all"
           ? data
-          : data.filter((r) => (r.created_by ?? "").trim() === tableCreator);
+          : data.filter((r) => (r.created_by ?? "").trim() === creatorFilter);
       setRows(filtered);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to apply filters.");
@@ -399,6 +409,7 @@ export default function DoctorPage() {
     }
     writeDoctorPending(remaining);
     setPendingCount(remaining.length);
+    setPendingItems(remaining);
     if (remaining.length !== items.length) {
       setToast("Pending doctor patients synced.");
       await refreshToday();
@@ -415,6 +426,9 @@ export default function DoctorPage() {
     if (!authReady || !authUser) return;
     void refreshToday();
     setPendingCount(readDoctorPending().length);
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      void flushPendingCreates();
+    }
   }, [authReady, authUser]);
 
   useEffect(() => {
@@ -429,7 +443,13 @@ export default function DoctorPage() {
     if (!authReady || !authUser || activeSection !== "tables") return;
     void applyTableFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authReady, authUser, activeSection]);
+  }, [authReady, authUser, activeSection, tableMode, tableRefDate, tableFromDate, tableToDate, tableCreator, tableMineOnly]);
+
+  useEffect(() => {
+    if (!authReady || !authUser || activeSection !== "summary") return;
+    void generateSummaryReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authReady, authUser, activeSection, summaryMode, summaryDate, summaryFrom, summaryTo]);
 
   useEffect(() => {
     const stored = localStorage.getItem("theme");
@@ -509,6 +529,7 @@ export default function DoctorPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    scrollToTop();
     setError(null);
     setSaving(true);
     try {
@@ -585,18 +606,49 @@ export default function DoctorPage() {
       setInfectionChoice("");
       setInfectionOtherText("");
     }
-    setActiveSection("new");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setEditModalOpen(true);
+  }
+
+  function closeEditModal() {
+    setEditModalOpen(false);
+    resetForm();
+  }
+
+  async function saveEditFromModal() {
+    if (!editingPatientId) return;
+    setError(null);
+    setSaving(true);
+    try {
+      const { apiPayload } = buildDoctorPayloadFromForm();
+      await updatePatient(editingPatientId, apiPayload);
+      setToast("Updated successfully.");
+      closeEditModal();
+      await refreshToday();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function onResetClick() {
+    resetForm();
+    scrollToTop();
+  }
+
+  async function onRefreshClick() {
+    await refreshToday();
+    scrollToTop();
   }
 
   async function removePatient(row: Patient) {
-    if (!confirm(`Delete patient ${row.id_no}?`)) return;
     setDeletingPatientId(row.id);
     setError(null);
     try {
       await deletePatient(row.id);
       if (editingPatientId === row.id) resetForm();
       setToast("Patient deleted.");
+      setDeleteConfirmPatient(null);
       await refreshToday();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to delete patient.");
@@ -605,22 +657,55 @@ export default function DoctorPage() {
     }
   }
 
-  function downloadBlob(blob: Blob, filename: string) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
   async function onExport() {
     setExporting(true);
     try {
-      const blob = await exportPatientsExcel({ date: todayYmd() });
-      downloadBlob(blob, `doctor-opd-${todayYmd()}.xlsx`);
+      const date = todayYmd();
+      const data = await listPatients({ date });
+      const sheetRows = data.map((r, idx) => {
+        const parsed = parseDoctorNotes(r.notes);
+        const dt = new Date(r.created_at);
+        const time = isNaN(dt.getTime()) ? "-" : `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+        const createdDate = isNaN(dt.getTime())
+          ? "-"
+          : `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+        const category = parsed.cat || (r.room === "room2" ? "Medical" : "Surgical");
+        return {
+          serial: idx + 1,
+          patientId: r.id_no,
+          gender: r.sex === "M" ? "Male" : "Female",
+          age: r.age,
+          diagnosisNumbers: parsed.dxNo.join(", ") || "-",
+          diagnosisNames: parsed.dx.join(", ") || "-",
+          category,
+          ww: r.ww ? "Yes" : "No",
+          disposition: parsed.disposition || "-",
+          time,
+          createdDate,
+          createdBy: (r.created_by ?? "").trim() || "-",
+        };
+      });
+      await exportStyledExcel({
+        sheetName: "Doctor Daily",
+        title: "Doctor OPD Daily Export",
+        subtitle: `Date: ${date}`,
+        filename: `doctor-opd-${date}.xlsx`,
+        columns: [
+          { header: "#", key: "serial", width: 8 },
+          { header: "Patient ID", key: "patientId", width: 18 },
+          { header: "Gender", key: "gender", width: 12 },
+          { header: "Age", key: "age", width: 10 },
+          { header: "Diagnosis No", key: "diagnosisNumbers", width: 20 },
+          { header: "Diagnosis Name", key: "diagnosisNames", width: 40 },
+          { header: "Category", key: "category", width: 14 },
+          { header: "WW", key: "ww", width: 10 },
+          { header: "Disposition", key: "disposition", width: 18 },
+          { header: "Time", key: "time", width: 12 },
+          { header: "Created Date", key: "createdDate", width: 16 },
+          { header: "Created By", key: "createdBy", width: 20 },
+        ],
+        rows: sheetRows,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export failed.");
     } finally {
@@ -654,33 +739,35 @@ export default function DoctorPage() {
   }
 
   function exportSummaryExcel() {
-    const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-    const lines: string[] = [];
-    lines.push([esc("Doctor Summary"), esc(summaryLabel)].join(";"));
-    lines.push([esc("Metric"), esc("Value")].join(";"));
-    lines.push([esc("Total"), esc(stats.total)].join(";"));
-    lines.push([esc("Male"), esc(stats.male)].join(";"));
-    lines.push([esc("Female"), esc(stats.female)].join(";"));
-    lines.push([esc("Surgical WW"), esc(stats.wwCount)].join(";"));
-    lines.push([esc("Surgical Non-WW"), esc(stats.nonWw)].join(";"));
-    lines.push("");
-    lines.push([esc("Age Group"), esc("Male"), esc("Female")].join(";"));
-    for (const g of stats.ageBreakdown) {
-      lines.push([esc(g.label), esc(g.male), esc(g.female)].join(";"));
-    }
-    lines.push("");
-    lines.push([esc("Top Diagnosis"), esc("Count")].join(";"));
-    if (stats.topDx.length === 0) {
-      lines.push([esc("No data"), esc(0)].join(";"));
-    } else {
-      for (const [dx, count] of stats.topDx) {
-        lines.push([esc(dx), esc(count)].join(";"));
-      }
-    }
-    const csv = "\uFEFF" + lines.join("\r\n") + "\r\n";
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const safeLabel = summaryLabel.replace(/[^\w\-]+/g, "_");
-    downloadBlob(blob, `doctor-summary-${safeLabel}.csv`);
+    void exportStyledExcel({
+      sheetName: "Summary",
+      title: "Doctor Summary Report",
+      subtitle: `Range: ${summaryLabel}`,
+      filename: `doctor-summary-${safeLabel}.xlsx`,
+      columns: [
+        { header: "Total", key: "total", width: 12 },
+        { header: "Male", key: "male", width: 12 },
+        { header: "Female", key: "female", width: 12 },
+        { header: "Surgical WW", key: "wwCount", width: 16 },
+        { header: "Surgical Non-WW", key: "nonWw", width: 18 },
+        { header: "Age Breakdown", key: "ageBreakdown", width: 42 },
+        { header: "Top Diagnoses", key: "topDx", width: 48 },
+      ],
+      rows: [
+        {
+          total: stats.total,
+          male: stats.male,
+          female: stats.female,
+          wwCount: stats.wwCount,
+          nonWw: stats.nonWw,
+          ageBreakdown: stats.ageBreakdown
+            .map((g) => `${g.label}: M ${g.male} / F ${g.female}`)
+            .join(" | "),
+          topDx: stats.topDx.length === 0 ? "No data" : stats.topDx.map(([dx, c]) => `${dx} (${c})`).join(" | "),
+        },
+      ],
+    });
   }
 
   const creatorOptions = useMemo(() => {
@@ -693,29 +780,8 @@ export default function DoctorPage() {
   }, [rows]);
 
   function exportFilteredTableExcel() {
-    const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-    const lines: string[] = [];
     const { from, to } = currentTableRange();
-    lines.push([esc("Doctor Patients Table"), esc(`${from} to ${to}`)].join(";"));
-    lines.push([esc("Total Patients"), esc(rows.length)].join(";"));
-    lines.push("");
-    lines.push(
-      [
-        esc("#"),
-        esc("Time"),
-        esc("Created Date"),
-        esc("Created By"),
-        esc("Patient ID"),
-        esc("Gender"),
-        esc("Age"),
-        esc("Dx No(s)"),
-        esc("Dx Name(s)"),
-        esc("Cat"),
-        esc("WW"),
-        esc("Disposition"),
-      ].join(";")
-    );
-    rows.forEach((r, idx) => {
+    const exportRows = rows.map((r, idx) => {
       const parsed = parseDoctorNotes(r.notes);
       const dt = new Date(r.created_at);
       const time = isNaN(dt.getTime()) ? "-" : `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
@@ -723,26 +789,42 @@ export default function DoctorPage() {
         ? "-"
         : `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
       const category = parsed.cat || (r.room === "room2" ? "Medical" : "Surgical");
-      lines.push(
-        [
-          esc(idx + 1),
-          esc(time),
-          esc(createdDate),
-          esc((r.created_by ?? "").trim() || "-"),
-          esc(r.id_no),
-          esc(r.sex === "M" ? "Male" : "Female"),
-          esc(r.age),
-          esc(parsed.dxNo.join(", ") || "-"),
-          esc(parsed.dx.join(", ") || "-"),
-          esc(category),
-          esc(r.ww ? "Yes" : "No"),
-          esc(parsed.disposition || "-"),
-        ].join(";")
-      );
+      return {
+        serial: idx + 1,
+        patientId: r.id_no,
+        gender: r.sex === "M" ? "Male" : "Female",
+        age: r.age,
+        diagnosisNumbers: parsed.dxNo.join(", ") || "-",
+        diagnosisNames: parsed.dx.join(", ") || "-",
+        category,
+        ww: r.ww ? "Yes" : "No",
+        disposition: parsed.disposition || "-",
+        time,
+        createdDate,
+        createdBy: (r.created_by ?? "").trim() || "-",
+      };
     });
-    const csv = "\uFEFF" + lines.join("\r\n") + "\r\n";
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    downloadBlob(blob, `doctor-table-${from}-to-${to}.csv`);
+    void exportStyledExcel({
+      sheetName: "Doctor Table",
+      title: "Doctor Patients Table",
+      subtitle: `Range: ${from} to ${to} | Total: ${rows.length}`,
+      filename: `doctor-table-${from}-to-${to}.xlsx`,
+      columns: [
+        { header: "#", key: "serial", width: 8 },
+        { header: "Patient ID", key: "patientId", width: 18 },
+        { header: "Gender", key: "gender", width: 12 },
+        { header: "Age", key: "age", width: 10 },
+        { header: "Diagnosis No", key: "diagnosisNumbers", width: 20 },
+        { header: "Diagnosis Name", key: "diagnosisNames", width: 40 },
+        { header: "Category", key: "category", width: 14 },
+        { header: "WW", key: "ww", width: 10 },
+        { header: "Disposition", key: "disposition", width: 18 },
+        { header: "Time", key: "time", width: 12 },
+        { header: "Created Date", key: "createdDate", width: 16 },
+        ...(canManageDoctorUsers ? [{ header: "Created By", key: "createdBy", width: 20 }] : []),
+      ],
+      rows: exportRows,
+    });
   }
 
   if (!authReady || !authUser) {
@@ -760,11 +842,12 @@ export default function DoctorPage() {
   return (
     <div className="min-h-full flex-1 bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
       <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold">OPD LoggerX</h1>
+        <div className="mb-4">
+          <div className="mb-2 flex justify-end">
+            <PwaClient mode="header" />
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <h1 className="text-xl font-semibold">OPD LoggerX</h1>
+          <div className="mt-2 flex flex-wrap items-center justify-start gap-2">
             <div className="inline-flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <span className="font-semibold">{authUser.username}</span>
               {isSectionAdmin(authUser.role) ? (
@@ -783,16 +866,6 @@ export default function DoctorPage() {
                   <span className="inline-flex items-center gap-1">
                     <Plus className="h-3.5 w-3.5" /> Users
                   </span>
-                </button>
-              ) : null}
-              {pendingCount > 0 ? (
-                <button
-                  type="button"
-                  onClick={openPending}
-                  className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900 shadow-sm transition-colors hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-100 dark:hover:bg-amber-900/30"
-                  title="Pending offline doctor cases"
-                >
-                  {pendingCount} pending
                 </button>
               ) : null}
               <button
@@ -829,7 +902,6 @@ export default function DoctorPage() {
                   </>
                 )}
               </button>
-              <PwaClient mode="header" />
             </div>
           </div>
         </div>
@@ -878,6 +950,18 @@ export default function DoctorPage() {
             }`}
           >
             <div className="mb-3 text-sm font-semibold">New / Edit Today&apos;s Summary</div>
+            <div className="mb-3">
+              <button
+                type="button"
+                onClick={openPending}
+                className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 shadow-sm transition-colors hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-100 dark:hover:bg-amber-900/30"
+                title="Pending offline doctor cases"
+              >
+                Pending ({pendingCount})
+              </button>
+            </div>
+            {error ? <div className="mb-3 rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-100">{error}</div> : null}
+            {toast ? <div className="mb-3 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-100">{toast}</div> : null}
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
@@ -898,7 +982,7 @@ export default function DoctorPage() {
                       key={k}
                       type="button"
                       onClick={() => applyKeypadInput(k)}
-                      className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs font-semibold dark:border-zinc-800 dark:bg-zinc-950"
+                      className="min-h-11 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-2 text-sm font-semibold dark:border-zinc-800 dark:bg-zinc-950"
                     >
                       {k}
                     </button>
@@ -907,12 +991,12 @@ export default function DoctorPage() {
               </div>
               <div>
                 <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Age Range</label>
-                <div className="mt-1 grid grid-cols-2 gap-1">
+                <div className="mt-1 grid grid-cols-4 gap-1">
                   {[
-                    { id: "lt5", label: "Less than 5" },
-                    { id: "5to14", label: "5 to 14" },
-                    { id: "15to17", label: "15 to 17" },
-                    { id: "gte18", label: "18 or more" },
+                    { id: "lt5", label: "<5" },
+                    { id: "5to14", label: "5-14" },
+                    { id: "15to17", label: "15-17" },
+                    { id: "gte18", label: ">=18" },
                   ].map((opt) => {
                     const selected = ageRange === (opt.id as AgeRange);
                     return (
@@ -934,65 +1018,36 @@ export default function DoctorPage() {
               </div>
             </div>
 
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Gender</label>
-                <div className="mt-1 grid grid-cols-2 gap-1">
-                  {[
-                    { id: "M", label: "Male" },
-                    { id: "F", label: "Female" },
-                  ].map((opt) => {
-                    const selected = sex === (opt.id as Sex);
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => setSex(opt.id as Sex)}
-                        className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
-                          selected
-                            ? "border-slate-600 bg-slate-600 text-white"
-                            : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Disposition</label>
-                <div className="mt-1 grid grid-cols-2 gap-1">
-                  {[
-                    { id: "discharged", label: "Discharged" },
-                    { id: "admitted", label: "Admitted" },
-                    { id: "referred_ed", label: "Referred to ED" },
-                    { id: "referred_out", label: "Referred out" },
-                  ].map((opt) => {
-                    const selected = disposition === (opt.id as Disposition);
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => setDisposition(opt.id as Disposition)}
-                        className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
-                          selected
-                            ? "border-slate-600 bg-slate-600 text-white"
-                            : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
+            <div className="mt-3">
+              <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Gender</label>
+              <div className="mt-1 grid grid-cols-2 gap-1 sm:max-w-md">
+                {[
+                  { id: "M", label: "Male" },
+                  { id: "F", label: "Female" },
+                ].map((opt) => {
+                  const selected = sex === (opt.id as Sex);
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setSex(opt.id as Sex)}
+                      className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+                        selected
+                          ? "border-slate-600 bg-slate-600 text-white"
+                          : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             <div className="mt-3">
               <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
               <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {orderedDiagnoses.map((d) => {
+                {orderedDiagnoses.map((d, idx) => {
                   const selected = selectedDx.includes(d.no);
                   return (
                     <button
@@ -1013,7 +1068,7 @@ export default function DoctorPage() {
                       }}
                       className={`rounded-xl border px-3 py-2 text-xs font-semibold ${selected ? "border-slate-600 bg-slate-600 text-white" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"}`}
                     >
-                      <div>{d.no}. {d.name}</div>
+                      <div>{idx + 1}. {d.name}</div>
                       <div className={`mt-1 text-[10px] font-medium ${selected ? "text-slate-100/90" : "text-zinc-500 dark:text-zinc-400"}`}>
                         {d.category}
                       </div>
@@ -1065,6 +1120,34 @@ export default function DoctorPage() {
               </div>
             ) : null}
 
+            <div className="mt-3">
+              <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Disposition</label>
+              <div className="mt-1 grid grid-cols-2 gap-1 sm:grid-cols-4">
+                {[
+                  { id: "discharged", label: "Discharged" },
+                  { id: "admitted", label: "Admitted" },
+                  { id: "referred_ed", label: "Referred to ED" },
+                  { id: "referred_out", label: "Referred out" },
+                ].map((opt) => {
+                  const selected = disposition === (opt.id as Disposition);
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setDisposition(opt.id as Disposition)}
+                      className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+                        selected
+                          ? "border-slate-600 bg-slate-600 text-white"
+                          : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {hasSelectedSurgical ? (
                 <label className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950">
@@ -1077,9 +1160,6 @@ export default function DoctorPage() {
               <div />
             </div>
 
-            {error ? <div className="mt-3 rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-100">{error}</div> : null}
-            {toast ? <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-100">{toast}</div> : null}
-
             <div className="mt-3 flex gap-2">
               <button disabled={saving} type="submit" className="cursor-pointer rounded-xl bg-slate-600 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60">
                 {saving ? "Saving..." : editingPatientId ? "Update" : "Save & New"}
@@ -1087,16 +1167,16 @@ export default function DoctorPage() {
               {editingPatientId ? (
                 <button
                   type="button"
-                  onClick={resetForm}
+                  onClick={onResetClick}
                   className="cursor-pointer rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold dark:border-zinc-800 dark:bg-zinc-900"
                 >
                   Cancel Edit
                 </button>
               ) : null}
-              <button type="button" onClick={resetForm} className="cursor-pointer rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold dark:border-zinc-800 dark:bg-zinc-900">
+              <button type="button" onClick={onResetClick} className="cursor-pointer rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold dark:border-zinc-800 dark:bg-zinc-900">
                 Reset
               </button>
-              <button type="button" onClick={() => void refreshToday()} className="cursor-pointer rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold dark:border-zinc-800 dark:bg-zinc-900">
+              <button type="button" onClick={() => void onRefreshClick()} className="cursor-pointer rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold dark:border-zinc-800 dark:bg-zinc-900">
                 Refresh
               </button>
             </div>
@@ -1110,75 +1190,84 @@ export default function DoctorPage() {
           >
             <div className="mb-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
               <div className="mb-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300">Summary Range</div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSummaryMode("date")}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                    summaryMode === "date"
-                      ? "bg-slate-600 text-white"
-                      : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
-                  }`}
-                >
-                  Specific day
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSummaryMode("range")}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                    summaryMode === "range"
-                      ? "bg-slate-600 text-white"
-                      : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
-                  }`}
-                >
-                  Date range
-                </button>
-                {summaryMode === "date" ? (
-                  <input
-                    type="date"
-                    value={summaryDate}
-                    onChange={(e) => setSummaryDate(e.target.value)}
-                    className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
-                  />
-                ) : (
-                  <>
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSummaryMode("date")}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                      summaryMode === "date"
+                        ? "bg-slate-600 text-white"
+                        : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                    }`}
+                  >
+                    Specific day
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSummaryMode("range")}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                      summaryMode === "range"
+                        ? "bg-slate-600 text-white"
+                        : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                    }`}
+                  >
+                    Date range
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {summaryMode === "date" ? (
                     <input
                       type="date"
-                      value={summaryFrom}
-                      onChange={(e) => setSummaryFrom(e.target.value)}
+                      value={summaryDate}
+                      onChange={(e) => setSummaryDate(e.target.value)}
                       className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
                     />
-                    <input
-                      type="date"
-                      value={summaryTo}
-                      onChange={(e) => setSummaryTo(e.target.value)}
-                      className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
-                    />
-                  </>
-                )}
-                <button
-                  type="button"
-                  onClick={() => void generateSummaryReport()}
-                  disabled={summaryLoading}
-                  className="rounded-lg bg-slate-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                >
-                  {summaryLoading ? "Generating..." : "Generate summary"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSummaryExporting(true);
-                    try {
-                      exportSummaryExcel();
-                    } finally {
-                      setSummaryExporting(false);
-                    }
-                  }}
-                  disabled={summaryExporting}
-                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold dark:border-zinc-800 dark:bg-zinc-900 disabled:opacity-60"
-                >
-                  {summaryExporting ? "Exporting..." : "Export Summary Excel"}
-                </button>
+                  ) : (
+                    <>
+                      <input
+                        type="date"
+                        value={summaryFrom}
+                        onChange={(e) => setSummaryFrom(e.target.value)}
+                        className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+                      />
+                      <input
+                        type="date"
+                        value={summaryTo}
+                        onChange={(e) => setSummaryTo(e.target.value)}
+                        className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+                      />
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const today = todayYmd();
+                      setSummaryMode("date");
+                      setSummaryDate(today);
+                      setSummaryFrom(today);
+                      setSummaryTo(today);
+                    }}
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold dark:border-zinc-800 dark:bg-zinc-900"
+                  >
+                    Clear filter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSummaryExporting(true);
+                      try {
+                        exportSummaryExcel();
+                      } finally {
+                        setSummaryExporting(false);
+                      }
+                    }}
+                    disabled={summaryExporting}
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold dark:border-zinc-800 dark:bg-zinc-900 disabled:opacity-60"
+                  >
+                    {summaryExporting ? "Exporting..." : "Export Summary Excel"}
+                  </button>
+                </div>
               </div>
               <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Showing: {summaryLabel}</div>
             </div>
@@ -1201,16 +1290,6 @@ export default function DoctorPage() {
                 <div className="text-2xl font-extrabold">
                   {stats.wwCount}/{stats.nonWw}
                 </div>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-xl border border-zinc-200 p-3 text-sm dark:border-zinc-800">
-              <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">Age Breakdown</div>
-              <div className="mt-1">
-                {(() => {
-                  const mapLabel = (l: string) => (l === "0-4" ? "<5" : l);
-                  return stats.ageBreakdown.map((g) => `${mapLabel(g.label)} ${g.male + g.female}`).join(", ");
-                })()}
               </div>
             </div>
 
@@ -1246,6 +1325,177 @@ export default function DoctorPage() {
             </div>
           </div>
         </div>
+
+        {editModalOpen && editingPatientId ? (
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Edit patient">
+            <button type="button" className="absolute inset-0 bg-black/40" onClick={closeEditModal} aria-label="Close" />
+            <div className="relative my-4 w-full max-w-3xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:my-0">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-sm font-semibold">Edit Patient</div>
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold dark:border-zinc-800 dark:bg-zinc-950"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Patient ID</label>
+                  <input
+                    value={patientId}
+                    onChange={(e) => setPatientId(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Age Range</label>
+                  <div className="mt-1 grid grid-cols-4 gap-1">
+                    {[
+                      { id: "lt5", label: "<5" },
+                      { id: "5to14", label: "5-14" },
+                      { id: "15to17", label: "15-17" },
+                      { id: "gte18", label: ">=18" },
+                    ].map((opt) => {
+                      const selected = ageRange === (opt.id as AgeRange);
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setAgeRange(opt.id as AgeRange)}
+                          className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+                            selected
+                              ? "border-slate-600 bg-slate-600 text-white"
+                              : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Gender</label>
+                <div className="mt-1 grid grid-cols-2 gap-1 sm:max-w-md">
+                  {[
+                    { id: "M", label: "Male" },
+                    { id: "F", label: "Female" },
+                  ].map((opt) => {
+                    const selected = sex === (opt.id as Sex);
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setSex(opt.id as Sex)}
+                        className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+                          selected
+                            ? "border-slate-600 bg-slate-600 text-white"
+                            : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Disposition</div>
+                <div className="mt-1 grid grid-cols-2 gap-1 sm:grid-cols-4">
+                  {[
+                    { id: "discharged", label: "Discharged" },
+                    { id: "admitted", label: "Admitted" },
+                    { id: "referred_ed", label: "Referred to ED" },
+                    { id: "referred_out", label: "Referred out" },
+                  ].map((opt) => {
+                    const selected = disposition === (opt.id as Disposition);
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setDisposition(opt.id as Disposition)}
+                        className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+                          selected
+                            ? "border-slate-600 bg-slate-600 text-white"
+                            : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {hasSelectedSurgical ? (
+                <label className="mt-3 flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950">
+                  <span>WW</span>
+                  <input type="checkbox" checked={ww} onChange={(e) => setWw(e.target.checked)} />
+                </label>
+              ) : null}
+
+              {error ? <div className="mt-3 rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-100">{error}</div> : null}
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold dark:border-zinc-800 dark:bg-zinc-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveEditFromModal()}
+                  disabled={saving}
+                  className="rounded-xl bg-slate-600 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+                >
+                  {saving ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {deleteConfirmPatient ? (
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Delete patient confirmation">
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setDeleteConfirmPatient(null)}
+              aria-label="Close"
+            />
+            <div className="relative my-4 w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:my-0">
+              <div className="text-sm font-semibold">Delete patient</div>
+              <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+                Are you sure you want to delete patient <span className="font-semibold">{deleteConfirmPatient.id_no}</span>?
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmPatient(null)}
+                  className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold dark:border-zinc-800 dark:bg-zinc-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingPatientId === deleteConfirmPatient.id}
+                  onClick={() => void removePatient(deleteConfirmPatient)}
+                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200 disabled:opacity-60"
+                >
+                  {deletingPatientId === deleteConfirmPatient.id ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {canManageDoctorUsers && adminOpen ? (
           <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Doctor user management">
@@ -1693,17 +1943,7 @@ export default function DoctorPage() {
               <button
                 type="button"
                 disabled={exporting}
-                onClick={async () => {
-                  setExporting(true);
-                  try {
-                    const blob = await exportPatientsExcel({ date: todayYmd() });
-                    downloadBlob(blob, `doctor-opd-${todayYmd()}.xlsx`);
-                  } catch (e) {
-                    setError(e instanceof Error ? e.message : "Export failed.");
-                  } finally {
-                    setExporting(false);
-                  }
-                }}
+                onClick={() => void onExport()}
                 className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold dark:border-zinc-800 dark:bg-zinc-900"
               >
                 {exporting ? "Exporting..." : "Export Excel"}
@@ -1712,96 +1952,121 @@ export default function DoctorPage() {
           </div>
           <div className="mb-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
             <div className="mb-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300">Table Filters</div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setTableMode("daily")}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                  tableMode === "daily"
-                    ? "bg-slate-600 text-white"
-                    : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
-                }`}
-              >
-                deaily
-              </button>
-              <button
-                type="button"
-                onClick={() => setTableMode("weakly")}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                  tableMode === "weakly"
-                    ? "bg-slate-600 text-white"
-                    : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
-                }`}
-              >
-                weakly
-              </button>
-              <button
-                type="button"
-                onClick={() => setTableMode("monthly")}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                  tableMode === "monthly"
-                    ? "bg-slate-600 text-white"
-                    : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
-                }`}
-              >
-                monthly
-              </button>
-              <button
-                type="button"
-                onClick={() => setTableMode("range")}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                  tableMode === "range"
-                    ? "bg-slate-600 text-white"
-                    : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
-                }`}
-              >
-                custom range
-              </button>
-              {tableMode === "range" ? (
-                <>
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTableMode("daily")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                    tableMode === "daily"
+                      ? "bg-slate-600 text-white"
+                      : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                  }`}
+                >
+                  daily
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTableMode("weekly")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                    tableMode === "weekly"
+                      ? "bg-slate-600 text-white"
+                      : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                  }`}
+                >
+                  weekly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTableMode("monthly")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                    tableMode === "monthly"
+                      ? "bg-slate-600 text-white"
+                      : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                  }`}
+                >
+                  monthly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTableMode("range")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                    tableMode === "range"
+                      ? "bg-slate-600 text-white"
+                      : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                  }`}
+                >
+                  custom range
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {tableMode === "range" ? (
+                  <>
+                    <input
+                      type="date"
+                      value={tableFromDate}
+                      onChange={(e) => setTableFromDate(e.target.value)}
+                      className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+                    />
+                    <input
+                      type="date"
+                      value={tableToDate}
+                      onChange={(e) => setTableToDate(e.target.value)}
+                      className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+                    />
+                  </>
+                ) : (
                   <input
                     type="date"
-                    value={tableFromDate}
-                    onChange={(e) => setTableFromDate(e.target.value)}
+                    value={tableRefDate}
+                    onChange={(e) => setTableRefDate(e.target.value)}
                     className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
                   />
-                  <input
-                    type="date"
-                    value={tableToDate}
-                    onChange={(e) => setTableToDate(e.target.value)}
+                )}
+                {canManageDoctorUsers ? (
+                  <select
+                    value={tableCreator}
+                    onChange={(e) => setTableCreator(e.target.value)}
                     className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
-                  />
-                </>
-              ) : (
-                <input
-                  type="date"
-                  value={tableRefDate}
-                  onChange={(e) => setTableRefDate(e.target.value)}
-                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
-                />
-              )}
-              <select
-                value={tableCreator}
-                onChange={(e) => setTableCreator(e.target.value)}
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-950"
-              >
-                <option value="all">All creators</option>
-                {creatorOptions.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => void applyTableFilters()}
-                disabled={tableLoading}
-                className="rounded-lg bg-slate-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-              >
-                {tableLoading ? "Filtering..." : "Apply filters"}
-              </button>
+                  >
+                    <option value="all">All creators</option>
+                    {creatorOptions.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setTableMineOnly((prev) => !prev)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                      tableMineOnly
+                        ? "bg-slate-600 text-white"
+                        : "border border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                    }`}
+                  >
+                    {tableMineOnly ? "My cases only" : "Show my cases"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTableMode("daily");
+                    const today = todayYmd();
+                    setTableRefDate(today);
+                    setTableFromDate(today);
+                    setTableToDate(today);
+                    setTableCreator("all");
+                    setTableMineOnly(false);
+                  }}
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold dark:border-zinc-800 dark:bg-zinc-900"
+                >
+                  Clear filter
+                </button>
+              </div>
             </div>
-            <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800 dark:border-slate-800 dark:bg-slate-900/30 dark:text-slate-100">
               Total Patients: {rows.length}
             </div>
           </div>
@@ -1813,9 +2078,6 @@ export default function DoctorPage() {
                 <thead>
                   <tr className="text-left font-semibold text-zinc-600 dark:text-zinc-300">
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">#</th>
-                    <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Time</th>
-                    <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Created Date</th>
-                    <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Created By</th>
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Patient ID</th>
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Gender</th>
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Age</th>
@@ -1824,6 +2086,9 @@ export default function DoctorPage() {
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Cat</th>
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">WW</th>
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Disposition</th>
+                    <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Time</th>
+                    <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Created Date</th>
+                    {canManageDoctorUsers ? <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Created By</th> : null}
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">Actions</th>
                   </tr>
                 </thead>
@@ -1839,9 +2104,6 @@ export default function DoctorPage() {
                     return (
                       <tr key={r.id} className="border-t border-zinc-200 dark:border-zinc-800">
                         <td className="px-3 py-2">{idx + 1}</td>
-                        <td className="px-3 py-2">{time}</td>
-                        <td className="px-3 py-2">{createdDate}</td>
-                        <td className="px-3 py-2">{r.created_by && r.created_by.trim() ? r.created_by : "-"}</td>
                         <td className="px-3 py-2">{r.id_no}</td>
                         <td className="px-3 py-2">{r.sex === "M" ? "Male" : "Female"}</td>
                         <td className="px-3 py-2">{r.age}</td>
@@ -1850,6 +2112,9 @@ export default function DoctorPage() {
                         <td className="px-3 py-2">{category}</td>
                         <td className="px-3 py-2">{r.ww ? "Yes" : "No"}</td>
                         <td className="px-3 py-2">{parsed.disposition || "-"}</td>
+                        <td className="px-3 py-2">{time}</td>
+                        <td className="px-3 py-2">{createdDate}</td>
+                        {canManageDoctorUsers ? <td className="px-3 py-2">{r.created_by && r.created_by.trim() ? r.created_by : "-"}</td> : null}
                         <td className="px-3 py-2">
                           <div className="flex gap-1">
                             <button
@@ -1862,7 +2127,7 @@ export default function DoctorPage() {
                             <button
                               type="button"
                               disabled={deletingPatientId === r.id}
-                              onClick={() => void removePatient(r)}
+                              onClick={() => setDeleteConfirmPatient(r)}
                               className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200 disabled:opacity-60"
                             >
                               {deletingPatientId === r.id ? "Deleting..." : "Delete"}

@@ -18,7 +18,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   createPatient,
-  exportPatientsExcel,
   getPatientsCount,
   getPatientAudits,
   listPatients,
@@ -35,17 +34,7 @@ import { getAuthToken, setAuthToken, type AuthUser } from "@/lib/auth";
 import { createUser, deleteUser, listUsers, updateUser, type AdminUserRow } from "@/lib/usersApi";
 import { PatientAuditDetails } from "@/lib/patientAuditDetails";
 import { isDoctorRole, isSectionAdmin } from "@/lib/roleRouting";
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+import { exportStyledExcel } from "@/lib/excelExport";
 
 function todayYmd() {
   const d = new Date();
@@ -735,13 +724,53 @@ export default function Home() {
   async function onExport() {
     setError(null);
     try {
-      const blob = await exportPatientsExcel(effectiveFilters);
       const label =
         effectiveFilters.date ??
         (effectiveFilters.from_date && effectiveFilters.to_date
           ? `${effectiveFilters.from_date}_to_${effectiveFilters.to_date}`
           : todayYmd());
-      downloadBlob(blob, `surgical-dressing-log-${label}.csv`);
+      const exportRows = sortedPatients.map((p, idx) => {
+        const dt = new Date(p.created_at);
+        const createdDate = isNaN(dt.getTime())
+          ? "-"
+          : `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+        const createdTime = isNaN(dt.getTime())
+          ? "-"
+          : `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
+        return {
+          serial: idx + 1,
+          patientId: p.id_no,
+          gender: p.sex === "M" ? "Male" : "Female",
+          age: p.age,
+          room: p.room,
+          ww: p.ww ? "Yes" : "No",
+          lab: p.lab ? "Yes" : "No",
+          burn: p.burn ? "Yes" : "No",
+          notes: p.notes ?? "",
+          createdDate,
+          createdTime,
+        };
+      });
+      await exportStyledExcel({
+        sheetName: "Patients",
+        title: "Dressing and OPD Export",
+        subtitle: `Filter: ${label} | Total Patients: ${exportRows.length}`,
+        filename: `dressing-opd-${label}.xlsx`,
+        columns: [
+          { header: "#", key: "serial", width: 8 },
+          { header: "Patient ID", key: "patientId", width: 18 },
+          { header: "Gender", key: "gender", width: 12 },
+          { header: "Age", key: "age", width: 10 },
+          { header: "Room", key: "room", width: 12 },
+          { header: "WW", key: "ww", width: 10 },
+          { header: "Lab", key: "lab", width: 10 },
+          { header: "Burn", key: "burn", width: 10 },
+          { header: "Notes", key: "notes", width: 40 },
+          { header: "Created Date", key: "createdDate", width: 16 },
+          { header: "Created Time", key: "createdTime", width: 14 },
+        ],
+        rows: exportRows,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Export failed";
       setError(msg);
@@ -1970,7 +1999,7 @@ export default function Home() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-              Surgical Dressing Log
+              Dressing and OPD
             </h1>
           </div>
 

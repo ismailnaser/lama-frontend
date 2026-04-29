@@ -1,7 +1,7 @@
 {
-  "name": "Surgical Dressing Log",
-  "short_name": "Dressing Log",
-  "description": "Surgical dressing log — install for offline use.",
+  "name": "Dressing and OPD",
+  "short_name": "Dressing+OPD",
+  "description": "Dressing and OPD — install for offline use.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

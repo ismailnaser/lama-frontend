@@ -1372,13 +1372,7 @@ export default function DoctorPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {summaryMode === "date" ? (
-                    <input
-                      type="date"
-                      lang="en-CA"
-                      value={summaryDate}
-                      onChange={(e) => setSummaryDate(e.target.value)}
-                      className={DATE_INPUT_CLASS}
-                    />
+                    <DatePickerField label="Date" value={summaryDate} onChange={setSummaryDate} title="Summary date" />
                   ) : (
                     <>
                       <DatePickerField label="From" value={summaryFrom} onChange={setSummaryFrom} title="Summary from date" />
@@ -2171,7 +2165,7 @@ export default function DoctorPage() {
               </button>
             </div>
           </div>
-          <div className="mb-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+          <div className="mb-3 overflow-hidden rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
             <div className="mb-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300">Table Filters</div>
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -2233,18 +2227,12 @@ export default function DoctorPage() {
                   Specific day
                 </button>
                 {tableMode === "range" ? (
-                  <div className="flex flex-nowrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <DatePickerField label="From" value={tableFromDate} onChange={setTableFromDate} title="Table from date" />
                     <DatePickerField label="To" value={tableToDate} onChange={setTableToDate} title="Table to date" />
                   </div>
                 ) : (
-                  <input
-                    type="date"
-                    lang="en-CA"
-                    value={tableRefDate}
-                    onChange={(e) => setTableRefDate(e.target.value)}
-                    className={DATE_INPUT_CLASS}
-                  />
+                  <DatePickerField label="Date" value={tableRefDate} onChange={setTableRefDate} title="Table date" />
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">

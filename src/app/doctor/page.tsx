@@ -8,6 +8,7 @@ import { getAuthToken, setAuthToken, type AuthUser } from "@/lib/auth";
 import {
   createPatient,
   deletePatient,
+  getPatientsCount,
   listPatients,
   updatePatient,
   type Patient,
@@ -161,12 +162,15 @@ export default function DoctorPage() {
   const [tableCreator, setTableCreator] = useState("all");
   const [tableMineOnly, setTableMineOnly] = useState(false);
   const [showRegisteredCasesTotal, setShowRegisteredCasesTotal] = useState(false);
+  const [registeredCasesTotal, setRegisteredCasesTotal] = useState<number | null>(null);
+  const [registeredCasesLoading, setRegisteredCasesLoading] = useState(false);
   const [tableLoading, setTableLoading] = useState(false);
   const [tableExporting, setTableExporting] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingOpen, setPendingOpen] = useState(false);
   const [pendingItems, setPendingItems] = useState<PendingDoctorCreate[]>([]);
   const [editingPatientId, setEditingPatientId] = useState<number | null>(null);
+  const [editingPendingId, setEditingPendingId] = useState<string | null>(null);
   const [deletingPatientId, setDeletingPatientId] = useState<number | null>(null);
   const [deleteConfirmPatient, setDeleteConfirmPatient] = useState<Patient | null>(null);
 
@@ -393,6 +397,56 @@ export default function DoctorPage() {
     return { apiPayload, pendingPayload };
   }
 
+  function buildApiPayloadFromPendingPayload(payload: PendingDoctorCreate["payload"]) {
+    const id = payload.id_no.trim();
+    const ageNum = (() => {
+      if (payload.ageRange === "lt5") return 4;
+      if (payload.ageRange === "5to14") return 10;
+      if (payload.ageRange === "15to17") return 16;
+      if (payload.ageRange === "gte18") return 18;
+      return NaN;
+    })();
+    if (!id) throw new Error("Patient ID is required.");
+    if (!Number.isFinite(ageNum)) throw new Error("Age range is required.");
+    if (payload.selectedDx.length === 0) throw new Error("Select at least one diagnosis.");
+    if (payload.selectedDx.includes(4) && !payload.infectionChoice) {
+      throw new Error("Please select infection disease type.");
+    }
+    if (payload.selectedDx.includes(4) && payload.infectionChoice === "other" && !payload.infectionOtherText.trim()) {
+      throw new Error("Please write the infection disease name in Other.");
+    }
+
+    const selectedDiagItems = DIAGNOSES.filter((d) => payload.selectedDx.includes(d.no));
+    const infectionLabel = (() => {
+      if (payload.infectionChoice === "acute_viral_hepatitis") return "Acute Viral Hepatitis";
+      if (payload.infectionChoice === "mumps") return "Mumps";
+      if (payload.infectionChoice === "chicken_pox") return "Chicken pox";
+      if (payload.infectionChoice === "measles") return "Measles";
+      if (payload.infectionChoice === "menningits") return "Menningits";
+      if (payload.infectionChoice === "other") return `Other: ${payload.infectionOtherText.trim()}`;
+      return "";
+    })();
+    const selectedDxNames = selectedDiagItems.map((d) =>
+      d.no === 4 && infectionLabel ? `Infections Disease (${infectionLabel})` : d.name
+    );
+    const selectedDxNos = selectedDiagItems.map((d) => d.no);
+    const hasMedicalCategory = selectedDiagItems.some((d) => d.category === "Medical");
+    const categoryText = selectedDiagItems.every((d) => d.category === "Medical")
+      ? "Medical"
+      : selectedDiagItems.every((d) => d.category === "Surgical")
+        ? "Surgical"
+        : "Mixed";
+    const notes = [`dx_no:${selectedDxNos.join(",")}`, `dx:${selectedDxNames.join(",")}`, `cat:${categoryText}`, `disposition:${payload.disposition}`].join(" | ");
+    return {
+      id_no: id,
+      sex: payload.sex,
+      age: ageNum,
+      room: hasMedicalCategory ? ("room2" as const) : ("room1" as const),
+      ww: payload.ww,
+      notes,
+    };
+  }
+
   async function flushPendingCreates() {
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
     const items = readDoctorPending();
@@ -400,16 +454,7 @@ export default function DoctorPage() {
     const remaining: PendingDoctorCreate[] = [];
     for (const it of items) {
       try {
-        const p = it.payload;
-        setPatientId(p.id_no);
-        setSex(p.sex);
-        setAgeRange(p.ageRange);
-        setSelectedDx(p.selectedDx);
-        setInfectionChoice(p.infectionChoice);
-        setInfectionOtherText(p.infectionOtherText);
-        setWw(p.ww);
-        setDisposition(p.disposition);
-        const { apiPayload } = buildDoctorPayloadFromForm();
+        const apiPayload = buildApiPayloadFromPendingPayload(it.payload);
         await createPatient(apiPayload);
       } catch {
         remaining.push(it);
@@ -623,19 +668,41 @@ export default function DoctorPage() {
 
   function closeEditModal() {
     setEditModalOpen(false);
+    setEditingPendingId(null);
     resetForm();
   }
 
   async function saveEditFromModal() {
-    if (!editingPatientId) return;
+    if (!editingPatientId && !editingPendingId) return;
     setError(null);
     setSaving(true);
     try {
-      const { apiPayload } = buildDoctorPayloadFromForm();
-      await updatePatient(editingPatientId, apiPayload);
-      setToast("Updated successfully.");
+      if (editingPendingId) {
+        const nextPendingPayload: PendingDoctorCreate["payload"] = {
+          id_no: patientId.trim(),
+          sex,
+          ageRange: ageRange as AgeRange,
+          selectedDx: [...selectedDx],
+          infectionChoice,
+          infectionOtherText,
+          ww,
+          disposition,
+        };
+        buildApiPayloadFromPendingPayload(nextPendingPayload);
+        const next = readDoctorPending().map((x) =>
+          x.id === editingPendingId ? { ...x, payload: nextPendingPayload } : x
+        );
+        writeDoctorPending(next);
+        setPendingItems(next);
+        setPendingCount(next.length);
+        setToast("Pending case updated.");
+      } else if (editingPatientId) {
+        const { apiPayload } = buildDoctorPayloadFromForm();
+        await updatePatient(editingPatientId, apiPayload);
+        setToast("Updated successfully.");
+        await refreshToday();
+      }
       closeEditModal();
-      await refreshToday();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed.");
     } finally {
@@ -837,6 +904,24 @@ export default function DoctorPage() {
       ],
       rows: exportRows,
     });
+  }
+
+  async function toggleRegisteredCasesTotal() {
+    if (showRegisteredCasesTotal) {
+      setShowRegisteredCasesTotal(false);
+      return;
+    }
+    setShowRegisteredCasesTotal(true);
+    if (registeredCasesTotal !== null) return;
+    setRegisteredCasesLoading(true);
+    try {
+      const total = await getPatientsCount();
+      setRegisteredCasesTotal(total);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load total registered cases.");
+    } finally {
+      setRegisteredCasesLoading(false);
+    }
   }
 
   if (!authReady || !authUser) {
@@ -1286,24 +1371,26 @@ export default function DoctorPage() {
               <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Showing: {summaryLabel}</div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+            <div className="overflow-x-auto">
+              <div className="grid min-w-[720px] grid-cols-4 gap-3">
+                <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
                 <div className="text-xs text-zinc-500 dark:text-zinc-400">Total</div>
                 <div className="text-2xl font-extrabold">{stats.total}</div>
-              </div>
-              <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+                </div>
+                <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
                 <div className="text-xs text-zinc-500 dark:text-zinc-400">Male</div>
                 <div className="text-2xl font-extrabold">{stats.male}</div>
-              </div>
-              <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+                </div>
+                <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
                 <div className="text-xs text-zinc-500 dark:text-zinc-400">Female</div>
                 <div className="text-2xl font-extrabold">{stats.female}</div>
-              </div>
-              <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+                </div>
+                <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
                 <div className="text-xs text-zinc-500 dark:text-zinc-400">Surgical WW/Non</div>
                 <div className="text-2xl font-extrabold">
                   {stats.wwCount}/{stats.nonWw}
                 </div>
+              </div>
               </div>
             </div>
 
@@ -1340,12 +1427,12 @@ export default function DoctorPage() {
           </div>
         </div>
 
-        {editModalOpen && editingPatientId ? (
+        {editModalOpen && (editingPatientId || editingPendingId) ? (
           <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Edit patient">
             <button type="button" className="absolute inset-0 bg-black/40" onClick={closeEditModal} aria-label="Close" />
             <div className="relative my-4 w-full max-w-3xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:my-0 sm:max-h-[85vh] sm:overflow-y-auto">
               <div className="mb-3 flex items-center justify-between">
-                <div className="text-sm font-semibold">Edit Patient</div>
+                <div className="text-sm font-semibold">{editingPendingId ? "Edit Pending Case" : "Edit Patient"}</div>
                 <button
                   type="button"
                   onClick={closeEditModal}
@@ -1845,23 +1932,20 @@ export default function DoctorPage() {
                             <div className="flex justify-end gap-2">
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setPatientId(it.payload.id_no);
-                                  setSex(it.payload.sex);
-                                  setAgeRange(it.payload.ageRange);
-                                  setSelectedDx(it.payload.selectedDx);
-                                  setInfectionChoice(it.payload.infectionChoice);
-                                  setInfectionOtherText(it.payload.infectionOtherText);
-                                  setWw(it.payload.ww);
-                                  setDisposition(it.payload.disposition);
-                                  const next = readDoctorPending().filter((x) => x.id !== it.id);
-                                  writeDoctorPending(next);
-                                  setPendingItems(next);
-                                  setPendingCount(next.length);
-                                  setPendingOpen(false);
-                                  setActiveSection("new");
-                                  window.scrollTo({ top: 0, behavior: "smooth" });
-                                }}
+                              onClick={() => {
+                                setEditingPatientId(null);
+                                setEditingPendingId(it.id);
+                                setPatientId(it.payload.id_no);
+                                setSex(it.payload.sex);
+                                setAgeRange(it.payload.ageRange);
+                                setSelectedDx(it.payload.selectedDx);
+                                setInfectionChoice(it.payload.infectionChoice);
+                                setInfectionOtherText(it.payload.infectionOtherText);
+                                setWw(it.payload.ww);
+                                setDisposition(it.payload.disposition);
+                                setPendingOpen(false);
+                                setEditModalOpen(true);
+                              }}
                                 className="rounded-md border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900"
                               >
                                 Edit
@@ -2082,8 +2166,8 @@ export default function DoctorPage() {
                   onClick={() => setTableMode("range")}
                   className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
                     tableMode === "range"
-                      ? "bg-emerald-600 text-white"
-                      : "border border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-200"
+                      ? "bg-fuchsia-600 text-white"
+                      : "border border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800 dark:border-fuchsia-900/40 dark:bg-fuchsia-900/20 dark:text-fuchsia-200"
                   }`}
                 >
                   custom range
@@ -2113,6 +2197,8 @@ export default function DoctorPage() {
                     className={DATE_INPUT_CLASS}
                   />
                 )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
                 {canManageDoctorUsers ? (
                   <select
                     value={tableCreator}
@@ -2156,7 +2242,7 @@ export default function DoctorPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowRegisteredCasesTotal((prev) => !prev)}
+                  onClick={() => void toggleRegisteredCasesTotal()}
                   className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
                     showRegisteredCasesTotal
                       ? "bg-slate-600 text-white"
@@ -2174,7 +2260,7 @@ export default function DoctorPage() {
           {loading || tableLoading ? (
             <div className="text-sm text-zinc-500">Loading...</div>
           ) : (
-            <div className="overflow-auto">
+            <div className="overflow-auto doctor-cases-table">
               <table className="w-full border-separate border-spacing-0 text-xs">
                 <thead>
                   <tr className="text-left font-semibold text-zinc-600 dark:text-zinc-300">
@@ -2197,7 +2283,8 @@ export default function DoctorPage() {
                   {showRegisteredCasesTotal ? (
                     <tr className="border-t border-zinc-200 bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900/40">
                       <td colSpan={tableColSpan} className="px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-                        Total registered cases: {rows.length}
+                        Total registered cases (all days):{" "}
+                        {registeredCasesLoading ? "Loading..." : (registeredCasesTotal ?? rows.length)}
                       </td>
                     </tr>
                   ) : null}

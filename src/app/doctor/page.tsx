@@ -70,7 +70,7 @@ const DIAGNOSES = [
 ] as const;
 const DOCTOR_PENDING_KEY = "doctorPendingPatientCreates";
 const DATE_INPUT_CLASS =
-  "rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 shadow-sm outline-none transition-colors focus:border-slate-500 focus:ring-2 focus:ring-slate-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:[color-scheme:dark] dark:focus:border-slate-400 dark:focus:ring-slate-800";
+  "min-w-[138px] rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium tabular-nums text-zinc-800 shadow-sm outline-none transition-colors [direction:ltr] text-left focus:border-slate-500 focus:ring-2 focus:ring-slate-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:[color-scheme:dark] dark:focus:border-slate-400 dark:focus:ring-slate-800";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -1320,24 +1320,33 @@ export default function DoctorPage() {
                   {summaryMode === "date" ? (
                     <input
                       type="date"
+                      lang="en-CA"
                       value={summaryDate}
                       onChange={(e) => setSummaryDate(e.target.value)}
                       className={DATE_INPUT_CLASS}
                     />
                   ) : (
                     <>
-                      <input
-                        type="date"
-                        value={summaryFrom}
-                        onChange={(e) => setSummaryFrom(e.target.value)}
-                        className={DATE_INPUT_CLASS}
-                      />
-                      <input
-                        type="date"
-                        value={summaryTo}
-                        onChange={(e) => setSummaryTo(e.target.value)}
-                        className={DATE_INPUT_CLASS}
-                      />
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">From</span>
+                        <input
+                          type="date"
+                          lang="en-CA"
+                          value={summaryFrom}
+                          onChange={(e) => setSummaryFrom(e.target.value)}
+                          className={DATE_INPUT_CLASS}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">To</span>
+                        <input
+                          type="date"
+                          lang="en-CA"
+                          value={summaryTo}
+                          onChange={(e) => setSummaryTo(e.target.value)}
+                          className={DATE_INPUT_CLASS}
+                        />
+                      </div>
                     </>
                   )}
                   <button
@@ -1388,7 +1397,7 @@ export default function DoctorPage() {
                 <div className="text-lg font-extrabold sm:text-2xl">{stats.female}</div>
                 </div>
                 <div className="min-w-0 rounded-xl border border-zinc-200 p-2 sm:p-3 dark:border-zinc-800">
-                <div className="truncate text-[11px] text-zinc-500 dark:text-zinc-400 sm:text-xs">Surgical WW/Non</div>
+                <div className="truncate text-[11px] text-zinc-500 dark:text-zinc-400 sm:text-xs">WW/Non</div>
                 <div className="text-lg font-extrabold sm:text-2xl">
                   {stats.wwCount}/{stats.nonWw}
                 </div>
@@ -2176,24 +2185,44 @@ export default function DoctorPage() {
                 >
                   custom range
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setTableMode("daily")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                    tableMode === "daily"
+                      ? "bg-violet-600 text-white"
+                      : "border border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-900/40 dark:bg-violet-900/20 dark:text-violet-200"
+                  }`}
+                >
+                  Specific day
+                </button>
                 {tableMode === "range" ? (
-                  <>
-                    <input
-                      type="date"
-                      value={tableFromDate}
-                      onChange={(e) => setTableFromDate(e.target.value)}
-                      className={DATE_INPUT_CLASS}
-                    />
-                    <input
-                      type="date"
-                      value={tableToDate}
-                      onChange={(e) => setTableToDate(e.target.value)}
-                      className={DATE_INPUT_CLASS}
-                    />
-                  </>
+                  <div className="flex flex-nowrap items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">From</span>
+                      <input
+                        type="date"
+                        lang="en-CA"
+                        value={tableFromDate}
+                        onChange={(e) => setTableFromDate(e.target.value)}
+                        className={DATE_INPUT_CLASS}
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">To</span>
+                      <input
+                        type="date"
+                        lang="en-CA"
+                        value={tableToDate}
+                        onChange={(e) => setTableToDate(e.target.value)}
+                        className={DATE_INPUT_CLASS}
+                      />
+                    </div>
+                  </div>
                 ) : (
                   <input
                     type="date"
+                    lang="en-CA"
                     value={tableRefDate}
                     onChange={(e) => setTableRefDate(e.target.value)}
                     className={DATE_INPUT_CLASS}

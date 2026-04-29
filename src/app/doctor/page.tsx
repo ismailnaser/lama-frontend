@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { fetchCurrentUser, logout } from "@/lib/authApi";
 import { PwaClient } from "@/components/PwaClient";
@@ -71,6 +71,60 @@ const DIAGNOSES = [
 const DOCTOR_PENDING_KEY = "doctorPendingPatientCreates";
 const DATE_INPUT_CLASS =
   "min-w-[138px] rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium tabular-nums text-zinc-800 shadow-sm outline-none transition-colors [direction:ltr] text-left focus:border-slate-500 focus:ring-2 focus:ring-slate-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:[color-scheme:dark] dark:focus:border-slate-400 dark:focus:ring-slate-800";
+
+function formatYmdForDisplay(ymd: string) {
+  const s = (ymd ?? "").trim();
+  if (!s) return "Select date";
+  const [y, m, d] = s.split("-");
+  if (!y || !m || !d) return s;
+  return `${d}/${m}/${y}`;
+}
+
+function DatePickerField({
+  label,
+  value,
+  onChange,
+  title,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  title: string;
+}) {
+  const ref = useRef<HTMLInputElement | null>(null);
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">{label}</span>
+      <button
+        type="button"
+        onClick={() => {
+          const el = ref.current;
+          if (!el) return;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (el as any).showPicker?.();
+          el.focus();
+          el.click();
+        }}
+        className="flex min-w-[138px] items-center justify-between gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-left text-xs font-medium tabular-nums text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 dark:active:bg-zinc-700"
+        title={title}
+      >
+        <span>{formatYmdForDisplay(value)}</span>
+        <span className="text-zinc-400" aria-hidden="true">
+          📅
+        </span>
+      </button>
+      <input
+        ref={ref}
+        type="date"
+        lang="en-CA"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="sr-only"
+        aria-label={title}
+      />
+    </div>
+  );
+}
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -1327,26 +1381,8 @@ export default function DoctorPage() {
                     />
                   ) : (
                     <>
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">From</span>
-                        <input
-                          type="date"
-                          lang="en-CA"
-                          value={summaryFrom}
-                          onChange={(e) => setSummaryFrom(e.target.value)}
-                          className={DATE_INPUT_CLASS}
-                        />
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">To</span>
-                        <input
-                          type="date"
-                          lang="en-CA"
-                          value={summaryTo}
-                          onChange={(e) => setSummaryTo(e.target.value)}
-                          className={DATE_INPUT_CLASS}
-                        />
-                      </div>
+                      <DatePickerField label="From" value={summaryFrom} onChange={setSummaryFrom} title="Summary from date" />
+                      <DatePickerField label="To" value={summaryTo} onChange={setSummaryTo} title="Summary to date" />
                     </>
                   )}
                   <button
@@ -2198,26 +2234,8 @@ export default function DoctorPage() {
                 </button>
                 {tableMode === "range" ? (
                   <div className="flex flex-nowrap items-center gap-2">
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">From</span>
-                      <input
-                        type="date"
-                        lang="en-CA"
-                        value={tableFromDate}
-                        onChange={(e) => setTableFromDate(e.target.value)}
-                        className={DATE_INPUT_CLASS}
-                      />
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">To</span>
-                      <input
-                        type="date"
-                        lang="en-CA"
-                        value={tableToDate}
-                        onChange={(e) => setTableToDate(e.target.value)}
-                        className={DATE_INPUT_CLASS}
-                      />
-                    </div>
+                    <DatePickerField label="From" value={tableFromDate} onChange={setTableFromDate} title="Table from date" />
+                    <DatePickerField label="To" value={tableToDate} onChange={setTableToDate} title="Table to date" />
                   </div>
                 ) : (
                   <input

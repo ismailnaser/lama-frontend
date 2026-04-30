@@ -227,6 +227,8 @@ export default function DoctorPage() {
   const [editingPendingId, setEditingPendingId] = useState<string | null>(null);
   const [deletingPatientId, setDeletingPatientId] = useState<number | null>(null);
   const [deleteConfirmPatient, setDeleteConfirmPatient] = useState<Patient | null>(null);
+  const [deleteAllConfirmOpen, setDeleteAllConfirmOpen] = useState(false);
+  const [deletingAllCases, setDeletingAllCases] = useState(false);
 
   const [patientId, setPatientId] = useState("");
   const [sex, setSex] = useState<Sex>("M");
@@ -788,6 +790,27 @@ export default function DoctorPage() {
       setError(e instanceof Error ? e.message : "Failed to delete patient.");
     } finally {
       setDeletingPatientId(null);
+    }
+  }
+
+  async function removeAllVisibleCases() {
+    if (!canManageDoctorUsers) return;
+    setDeletingAllCases(true);
+    setError(null);
+    try {
+      const ids = rows.map((r) => r.id);
+      for (const id of ids) {
+        await deletePatient(id);
+      }
+      setDeleteAllConfirmOpen(false);
+      setDeleteConfirmPatient(null);
+      setToast("All visible cases deleted.");
+      await refreshToday();
+      await applyTableFilters();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete all cases.");
+    } finally {
+      setDeletingAllCases(false);
     }
   }
 
@@ -1715,6 +1738,40 @@ export default function DoctorPage() {
           </div>
         ) : null}
 
+        {deleteAllConfirmOpen ? (
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Delete all cases confirmation">
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setDeleteAllConfirmOpen(false)}
+              aria-label="Close"
+            />
+            <div className="relative my-4 w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:my-0">
+              <div className="text-sm font-semibold">Delete all cases</div>
+              <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+                This will delete all currently listed cases ({rows.length}). Are you sure?
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteAllConfirmOpen(false)}
+                  className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold dark:border-zinc-800 dark:bg-zinc-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingAllCases || rows.length === 0}
+                  onClick={() => void removeAllVisibleCases()}
+                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200 disabled:opacity-60"
+                >
+                  {deletingAllCases ? "Deleting..." : "Delete all"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {canManageDoctorUsers && adminOpen ? (
           <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Doctor user management">
             <button
@@ -2140,6 +2197,16 @@ export default function DoctorPage() {
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="text-sm font-semibold">All Data / Export</div>
             <div className="flex gap-2">
+              {canManageDoctorUsers ? (
+                <button
+                  type="button"
+                  onClick={() => setDeleteAllConfirmOpen(true)}
+                  disabled={deletingAllCases || rows.length === 0}
+                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200 disabled:opacity-60"
+                >
+                  {deletingAllCases ? "Deleting..." : "Delete all cases"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {
@@ -2333,6 +2400,10 @@ export default function DoctorPage() {
                       ? "-"
                       : `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
                     const category = parsed.cat || (r.room === "room2" ? "Medical" : "Surgical");
+                    const rowCreatedBy = (r.created_by ?? "").trim().toLowerCase();
+                    const currentUsername = (authUser?.username ?? "").trim().toLowerCase();
+                    const canManageThisRow =
+                      canManageDoctorUsers || (rowCreatedBy.length > 0 && rowCreatedBy === currentUsername);
                     return (
                       <tr key={r.id} className="border-t border-zinc-200 dark:border-zinc-800">
                         <td className="px-3 py-2">{idx + 1}</td>
@@ -2348,23 +2419,27 @@ export default function DoctorPage() {
                         <td className="px-3 py-2">{createdDate}</td>
                         {canManageDoctorUsers ? <td className="px-3 py-2">{r.created_by && r.created_by.trim() ? r.created_by : "-"}</td> : null}
                         <td className="px-3 py-2">
-                          <div className="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => startEditPatient(r)}
-                              className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold dark:border-zinc-800 dark:bg-zinc-900"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              disabled={deletingPatientId === r.id}
-                              onClick={() => setDeleteConfirmPatient(r)}
-                              className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200 disabled:opacity-60"
-                            >
-                              {deletingPatientId === r.id ? "Deleting..." : "Delete"}
-                            </button>
-                          </div>
+                          {canManageThisRow ? (
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => startEditPatient(r)}
+                                className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold dark:border-zinc-800 dark:bg-zinc-900"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                disabled={deletingPatientId === r.id}
+                                onClick={() => setDeleteConfirmPatient(r)}
+                                className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200 disabled:opacity-60"
+                              >
+                                {deletingPatientId === r.id ? "Deleting..." : "Delete"}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-zinc-400">-</span>
+                          )}
                         </td>
                       </tr>
                     );

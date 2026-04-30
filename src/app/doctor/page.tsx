@@ -810,18 +810,19 @@ export default function DoctorPage() {
     }
   }
 
-  async function removeAllVisibleCases() {
+  async function removeAllCasesFromDatabase() {
     if (!canManageDoctorUsers) return;
     setDeletingAllCases(true);
     setError(null);
     try {
-      const ids = rows.map((r) => r.id);
+      const allCases = await listPatients({});
+      const ids = allCases.map((r) => r.id);
       for (const id of ids) {
         await deletePatient(id);
       }
       setDeleteAllConfirmOpen(false);
       setDeleteConfirmPatient(null);
-      setToast("All visible cases deleted.");
+      setToast("All doctor cases deleted from database.");
       await refreshToday();
       await applyTableFilters();
     } catch (e) {
@@ -1755,7 +1756,7 @@ export default function DoctorPage() {
           </div>
         ) : null}
 
-        {deleteAllConfirmOpen ? (
+        {canManageDoctorUsers && deleteAllConfirmOpen ? (
           <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Delete all cases confirmation">
             <button
               type="button"
@@ -1766,7 +1767,7 @@ export default function DoctorPage() {
             <div className="relative my-4 w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:my-0">
               <div className="text-sm font-semibold">Delete all cases</div>
               <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-                This will delete all currently listed cases ({rows.length}). Are you sure?
+                Warning: This will permanently delete all doctor patients from the database. Are you sure?
               </div>
               <div className="mt-4 flex justify-end gap-2">
                 <button
@@ -1778,8 +1779,8 @@ export default function DoctorPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={deletingAllCases || rows.length === 0}
-                  onClick={() => void removeAllVisibleCases()}
+                  disabled={deletingAllCases}
+                  onClick={() => void removeAllCasesFromDatabase()}
                   className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200 disabled:opacity-60"
                 >
                   {deletingAllCases ? "Deleting..." : "Delete all"}

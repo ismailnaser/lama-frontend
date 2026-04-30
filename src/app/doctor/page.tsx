@@ -214,6 +214,8 @@ export default function DoctorPage() {
   const [tableFromDate, setTableFromDate] = useState(todayYmd());
   const [tableToDate, setTableToDate] = useState(todayYmd());
   const [tableCreator, setTableCreator] = useState("all");
+  const [tableSearchId, setTableSearchId] = useState("");
+  const [tablePage, setTablePage] = useState(1);
   const [tableMineOnly, setTableMineOnly] = useState(false);
   const [showRegisteredCasesTotal, setShowRegisteredCasesTotal] = useState(false);
   const [registeredCasesTotal, setRegisteredCasesTotal] = useState<number | null>(null);
@@ -266,6 +268,17 @@ export default function DoctorPage() {
     const d = DIAGNOSES.find((x) => x.no === no);
     return d?.category === "Surgical";
   });
+  const tableFilteredRows = useMemo(() => {
+    const q = tableSearchId.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => r.id_no.toLowerCase().includes(q));
+  }, [rows, tableSearchId]);
+  const tableTotalPages = Math.max(1, Math.ceil(tableFilteredRows.length / 10));
+  const tableSafePage = Math.min(Math.max(1, tablePage), tableTotalPages);
+  const tablePagedRows = useMemo(() => {
+    const start = (tableSafePage - 1) * 10;
+    return tableFilteredRows.slice(start, start + 10);
+  }, [tableFilteredRows, tableSafePage]);
   const tableColSpan = canManageDoctorUsers ? 13 : 12;
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -554,6 +567,10 @@ export default function DoctorPage() {
     void applyTableFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady, authUser, activeSection, tableMode, tableRefDate, tableFromDate, tableToDate, tableCreator, tableMineOnly, showRegisteredCasesTotal]);
+
+  useEffect(() => {
+    setTablePage(1);
+  }, [tableSearchId, rows.length]);
 
   useEffect(() => {
     if (!authReady || !authUser || activeSection !== "summary") return;
@@ -2357,15 +2374,25 @@ export default function DoctorPage() {
                 </button>
               </div>
             </div>
-            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800 dark:border-slate-800 dark:bg-slate-900/30 dark:text-slate-100">
-              Total Patients: {rows.length}
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800 dark:border-slate-800 dark:bg-slate-900/30 dark:text-slate-100">
+                Total Patients: {tableFilteredRows.length}
+              </div>
+              <input
+                type="text"
+                value={tableSearchId}
+                onChange={(e) => setTableSearchId(e.target.value)}
+                placeholder="Search by Patient ID"
+                className="w-full max-w-xs rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-800 shadow-sm outline-none transition-colors focus:border-slate-500 focus:ring-2 focus:ring-slate-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-slate-400 dark:focus:ring-slate-800"
+              />
             </div>
           </div>
           {loading || tableLoading ? (
             <div className="text-sm text-zinc-500">Loading...</div>
           ) : (
-            <div className="overflow-auto doctor-cases-table">
-              <table className="w-full border-separate border-spacing-0 text-xs">
+            <>
+              <div className="overflow-auto doctor-cases-table">
+                <table className="w-full border-separate border-spacing-0 text-xs">
                 <thead>
                   <tr className="text-left font-semibold text-zinc-600 dark:text-zinc-300">
                     <th className="sticky top-0 bg-zinc-100 px-3 py-2 dark:bg-zinc-800/70">#</th>
@@ -2388,11 +2415,11 @@ export default function DoctorPage() {
                     <tr className="border-t border-zinc-200 bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900/40">
                       <td colSpan={tableColSpan} className="px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
                         All registered cases (all days):{" "}
-                        {registeredCasesLoading ? "Loading..." : (registeredCasesTotal ?? rows.length)}
+                        {registeredCasesLoading ? "Loading..." : (registeredCasesTotal ?? tableFilteredRows.length)}
                       </td>
                     </tr>
                   ) : null}
-                  {rows.map((r, idx) => {
+                  {tablePagedRows.map((r, idx) => {
                     const parsed = parseDoctorNotes(r.notes);
                     const dt = new Date(r.created_at);
                     const time = isNaN(dt.getTime()) ? "-" : `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
@@ -2406,7 +2433,7 @@ export default function DoctorPage() {
                       canManageDoctorUsers || (rowCreatedBy.length > 0 && rowCreatedBy === currentUsername);
                     return (
                       <tr key={r.id} className="border-t border-zinc-200 dark:border-zinc-800">
-                        <td className="px-3 py-2">{idx + 1}</td>
+                        <td className="px-3 py-2">{(tableSafePage - 1) * 10 + idx + 1}</td>
                         <td className="px-3 py-2">{r.id_no}</td>
                         <td className="px-3 py-2">{r.sex === "M" ? "Male" : "Female"}</td>
                         <td className="px-3 py-2">{r.age}</td>
@@ -2445,8 +2472,30 @@ export default function DoctorPage() {
                     );
                   })}
                 </tbody>
-              </table>
-            </div>
+                </table>
+              </div>
+              <div className="mt-3 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setTablePage((p) => Math.max(1, p - 1))}
+                disabled={tableSafePage <= 1}
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold dark:border-zinc-800 dark:bg-zinc-900 disabled:opacity-50"
+              >
+                Prev
+              </button>
+              <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+                Page {tableSafePage} / {tableTotalPages}
+              </div>
+              <button
+                type="button"
+                onClick={() => setTablePage((p) => Math.min(tableTotalPages, p + 1))}
+                disabled={tableSafePage >= tableTotalPages}
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold dark:border-zinc-800 dark:bg-zinc-900 disabled:opacity-50"
+              >
+                Next
+              </button>
+              </div>
+            </>
           )}
         </div>
       </div>

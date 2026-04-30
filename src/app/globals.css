@@ -67,3 +67,31 @@ summary {
 .doctor-cases-table td:last-child {
   border-right: 0;
 }
+
+/* Project-wide active button color (WhatsApp green). */
+button:active:not(:disabled),
+[role="button"]:active:not([aria-disabled="true"]) {
+  background-color: #25d366 !important;
+  border-color: #1faa52 !important;
+  color: #ffffff !important;
+}
+
+/* Selected/active states used in app views. */
+button[class*="bg-slate-600"],
+button[class*="bg-emerald-600"],
+button[class*="bg-violet-600"],
+button[class*="bg-fuchsia-600"] {
+  background-color: #25d366 !important;
+  border-color: #1faa52 !important;
+  color: #ffffff !important;
+}
+
+button[class*="hover:bg-slate-700"]:hover,
+button[class*="hover:bg-slate-600"]:hover,
+button[class*="hover:bg-emerald-700"]:hover,
+button[class*="hover:bg-violet-700"]:hover,
+button[class*="hover:bg-fuchsia-700"]:hover {
+  background-color: #1faa52 !important;
+  border-color: #1faa52 !important;
+  color: #ffffff !important;
+}

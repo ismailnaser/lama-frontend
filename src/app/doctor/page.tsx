@@ -233,7 +233,7 @@ export default function DoctorPage() {
   const [deletingAllCases, setDeletingAllCases] = useState(false);
 
   const [patientId, setPatientId] = useState("");
-  const [sex, setSex] = useState<Sex>("M");
+  const [sex, setSex] = useState<Sex | "">("");
   const [ageRange, setAgeRange] = useState<AgeRange | "">("");
   const [keypadTarget, setKeypadTarget] = useState<"patientId">("patientId");
   const [selectedDx, setSelectedDx] = useState<number[]>([]);
@@ -288,7 +288,7 @@ export default function DoctorPage() {
 
   function resetForm() {
     setPatientId("");
-    setSex("M");
+    setSex("");
     setAgeRange("");
     setSelectedDx([]);
     setInfectionChoice("");
@@ -407,6 +407,7 @@ export default function DoctorPage() {
 
   function buildDoctorPayloadFromForm() {
     const id = patientId.trim();
+    const selectedSex = sex;
     const ageNum = (() => {
       if (ageRange === "lt5") return 4;
       if (ageRange === "5to14") return 10;
@@ -415,6 +416,7 @@ export default function DoctorPage() {
       return NaN;
     })();
     if (!id) throw new Error("Patient ID is required.");
+    if (selectedSex !== "M" && selectedSex !== "F") throw new Error("Gender is required.");
     if (!Number.isFinite(ageNum)) throw new Error("Age range is required.");
     if (selectedDx.length === 0) throw new Error("Select at least one diagnosis.");
     if (selectedDx.includes(4) && !infectionChoice) {
@@ -447,7 +449,7 @@ export default function DoctorPage() {
     const notes = [`dx_no:${selectedDxNos.join(",")}`, `dx:${selectedDxNames.join(",")}`, `cat:${categoryText}`, `disposition:${disposition}`].join(" | ");
     const apiPayload = {
       id_no: id,
-      sex,
+      sex: selectedSex,
       age: ageNum,
       room: hasMedicalCategory ? ("room2" as const) : ("room1" as const),
       ww,
@@ -455,7 +457,7 @@ export default function DoctorPage() {
     };
     const pendingPayload: PendingDoctorCreate["payload"] = {
       id_no: id,
-      sex,
+      sex: selectedSex,
       ageRange: ageRange as AgeRange,
       selectedDx: [...selectedDx],
       infectionChoice,
@@ -752,6 +754,7 @@ export default function DoctorPage() {
     setSaving(true);
     try {
       if (editingPendingId) {
+        if (sex !== "M" && sex !== "F") throw new Error("Gender is required.");
         const nextPendingPayload: PendingDoctorCreate["payload"] = {
           id_no: patientId.trim(),
           sex,
@@ -1262,10 +1265,18 @@ export default function DoctorPage() {
                           return [...prev, d.no];
                         });
                       }}
-                      className={`rounded-xl border px-3 py-2 text-xs font-semibold ${selected ? "border-slate-600 bg-slate-600 text-white" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"}`}
+                      className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
+                        d.category === "Medical"
+                          ? selected
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-100"
+                          : selected
+                            ? "border-purple-600 bg-purple-600 text-white"
+                            : "border-purple-200 bg-purple-50 text-purple-900 dark:border-purple-900/40 dark:bg-purple-900/20 dark:text-purple-100"
+                      }`}
                     >
                       <div>{idx + 1}. {d.name}</div>
-                      <div className={`mt-1 text-[10px] font-medium ${selected ? "text-slate-100/90" : "text-zinc-500 dark:text-zinc-400"}`}>
+                      <div className={`mt-1 text-[10px] font-medium ${selected ? "text-white/90" : "text-current/80"}`}>
                         {d.category}
                       </div>
                     </button>
@@ -1610,10 +1621,18 @@ export default function DoctorPage() {
                             return [...prev, d.no];
                           });
                         }}
-                        className={`rounded-xl border px-3 py-2 text-xs font-semibold ${selected ? "border-slate-600 bg-slate-600 text-white" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"}`}
+                        className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
+                          d.category === "Medical"
+                            ? selected
+                              ? "border-blue-600 bg-blue-600 text-white"
+                              : "border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-100"
+                            : selected
+                              ? "border-purple-600 bg-purple-600 text-white"
+                              : "border-purple-200 bg-purple-50 text-purple-900 dark:border-purple-900/40 dark:bg-purple-900/20 dark:text-purple-100"
+                        }`}
                       >
                         <div>{idx + 1}. {d.name}</div>
-                        <div className={`mt-1 text-[10px] font-medium ${selected ? "text-slate-100/90" : "text-zinc-500 dark:text-zinc-400"}`}>
+                        <div className={`mt-1 text-[10px] font-medium ${selected ? "text-white/90" : "text-current/80"}`}>
                           {d.category}
                         </div>
                       </button>

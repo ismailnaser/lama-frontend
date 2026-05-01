@@ -1246,8 +1246,8 @@ export default function DoctorPage() {
             <div className="mt-3">
               <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
               <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] font-semibold">
-                <span className="text-orange-400">Medical</span>
-                <span className="text-pink-400">Surgical</span>
+                <span className="text-orange-300">Medical</span>
+                <span className="text-pink-300">Surgical</span>
               </div>
               <div className="mt-1 grid grid-cols-3 gap-1.5 sm:gap-2">
                 {orderedDiagnoses.map((d, idx) => {
@@ -1271,16 +1271,16 @@ export default function DoctorPage() {
                           return [...prev, d.no];
                         });
                       }}
-                      className={`rounded-lg border px-2 py-1.5 text-[11px] font-semibold leading-tight transition ${
+                      className={`rounded-xl border px-2 py-1.5 text-[11px] font-semibold leading-tight text-white shadow-sm transition ${
                         isLastSingleInRow ? "col-span-3" : ""
                       } ${
                         d.category === "Medical"
                           ? selected
-                            ? "border-orange-400 bg-orange-300 text-black shadow-[0_0_0_2px_rgba(251,146,60,0.35)]"
-                            : "border-orange-300 bg-orange-100 text-black hover:bg-orange-200"
+                            ? "border-orange-300 bg-orange-500 shadow-[0_0_0_2px_rgba(251,146,60,0.28)]"
+                            : "border-orange-500 bg-orange-700 hover:bg-orange-600"
                           : selected
-                            ? "border-pink-400 bg-pink-300 text-black shadow-[0_0_0_2px_rgba(244,114,182,0.35)]"
-                            : "border-pink-300 bg-pink-100 text-black hover:bg-pink-200"
+                            ? "border-pink-300 bg-pink-500 shadow-[0_0_0_2px_rgba(244,114,182,0.28)]"
+                            : "border-pink-500 bg-pink-700 hover:bg-pink-600"
                       }`}
                     >
                       <div className="whitespace-normal break-words text-center">{d.name}</div>
@@ -1607,8 +1607,8 @@ export default function DoctorPage() {
               <div className="mt-3">
                 <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
                 <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] font-semibold">
-                  <span className="text-orange-400">Medical</span>
-                  <span className="text-pink-400">Surgical</span>
+                  <span className="text-orange-300">Medical</span>
+                  <span className="text-pink-300">Surgical</span>
                 </div>
                 <div className="mt-1 grid grid-cols-3 gap-1.5 sm:gap-2">
                   {orderedDiagnoses.map((d, idx) => {
@@ -1632,16 +1632,16 @@ export default function DoctorPage() {
                             return [...prev, d.no];
                           });
                         }}
-                        className={`rounded-lg border px-2 py-1.5 text-[11px] font-semibold leading-tight transition ${
+                        className={`rounded-xl border px-2 py-1.5 text-[11px] font-semibold leading-tight text-white shadow-sm transition ${
                           isLastSingleInRow ? "col-span-3" : ""
                         } ${
                           d.category === "Medical"
                             ? selected
-                              ? "border-orange-400 bg-orange-300 text-black shadow-[0_0_0_2px_rgba(251,146,60,0.35)]"
-                              : "border-orange-300 bg-orange-100 text-black hover:bg-orange-200"
+                              ? "border-orange-300 bg-orange-500 shadow-[0_0_0_2px_rgba(251,146,60,0.28)]"
+                              : "border-orange-500 bg-orange-700 hover:bg-orange-600"
                             : selected
-                              ? "border-pink-400 bg-pink-300 text-black shadow-[0_0_0_2px_rgba(244,114,182,0.35)]"
-                              : "border-pink-300 bg-pink-100 text-black hover:bg-pink-200"
+                              ? "border-pink-300 bg-pink-500 shadow-[0_0_0_2px_rgba(244,114,182,0.28)]"
+                              : "border-pink-500 bg-pink-700 hover:bg-pink-600"
                         }`}
                       >
                         <div className="whitespace-normal break-words text-center">{d.name}</div>

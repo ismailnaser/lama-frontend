@@ -1295,10 +1295,10 @@ export default function DoctorPage() {
                               return [...prev, d.no];
                             });
                           }}
-                          className={`flex h-12 w-full items-center justify-center rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight text-black shadow-sm transition ${
+                          className={`flex h-12 w-full items-center justify-center rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight text-black shadow-sm transition dark:text-zinc-100 ${
                             selected
-                              ? "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)]"
-                              : "border-zinc-300 bg-white hover:border-emerald-500"
+                              ? "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)] dark:border-emerald-400 dark:bg-emerald-500 dark:text-zinc-950"
+                              : "border-zinc-300 bg-white hover:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-emerald-400 dark:hover:bg-zinc-800"
                           }`}
                         >
                           <div className="whitespace-normal break-words text-center">{d.name}</div>
@@ -1663,10 +1663,10 @@ export default function DoctorPage() {
                               return [...prev, d.no];
                             });
                           }}
-                          className={`flex h-12 w-full items-center justify-center rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight text-black shadow-sm transition ${
+                          className={`flex h-12 w-full items-center justify-center rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight text-black shadow-sm transition dark:text-zinc-100 ${
                             selected
-                              ? "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)]"
-                              : "border-zinc-300 bg-white hover:border-emerald-500"
+                              ? "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)] dark:border-emerald-400 dark:bg-emerald-500 dark:text-zinc-950"
+                              : "border-zinc-300 bg-white hover:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-emerald-400 dark:hover:bg-zinc-800"
                           }`}
                         >
                           <div className="whitespace-normal break-words text-center">{d.name}</div>

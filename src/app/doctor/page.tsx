@@ -1286,14 +1286,14 @@ export default function DoctorPage() {
                           return [...prev, d.no];
                         });
                       }}
-                      className={`rounded-xl border px-2 py-1.5 text-[11px] font-semibold leading-tight text-white shadow-sm transition ${spanClass} ${
+                      className={`rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight shadow-sm transition ${spanClass} ${
                         isMedical
                           ? selected
-                            ? "border-emerald-300 bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.28)]"
-                            : "border-emerald-500 bg-emerald-700 hover:bg-emerald-600"
+                            ? "border-emerald-500 bg-emerald-600 text-white shadow-[0_0_0_2px_rgba(16,185,129,0.28)]"
+                            : "border-zinc-300 bg-white text-black hover:border-emerald-500 hover:bg-emerald-50"
                           : selected
-                            ? "border-green-300 bg-green-500 shadow-[0_0_0_2px_rgba(34,197,94,0.28)]"
-                            : "border-green-500 bg-green-700 hover:bg-green-600"
+                            ? "border-zinc-300 bg-white text-black shadow-[0_0_0_2px_rgba(22,163,74,0.16)]"
+                            : "border-green-600 bg-green-700 text-white hover:bg-green-600"
                       }`}
                     >
                       <div className="whitespace-normal break-words text-center">{d.name}</div>
@@ -1655,14 +1655,14 @@ export default function DoctorPage() {
                             return [...prev, d.no];
                           });
                         }}
-                        className={`rounded-xl border px-2 py-1.5 text-[11px] font-semibold leading-tight text-white shadow-sm transition ${spanClass} ${
+                        className={`rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight shadow-sm transition ${spanClass} ${
                           isMedical
                             ? selected
-                              ? "border-emerald-300 bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.28)]"
-                              : "border-emerald-500 bg-emerald-700 hover:bg-emerald-600"
+                              ? "border-emerald-500 bg-emerald-600 text-white shadow-[0_0_0_2px_rgba(16,185,129,0.28)]"
+                              : "border-zinc-300 bg-white text-black hover:border-emerald-500 hover:bg-emerald-50"
                             : selected
-                              ? "border-green-300 bg-green-500 shadow-[0_0_0_2px_rgba(34,197,94,0.28)]"
-                              : "border-green-500 bg-green-700 hover:bg-green-600"
+                              ? "border-zinc-300 bg-white text-black shadow-[0_0_0_2px_rgba(22,163,74,0.16)]"
+                              : "border-green-600 bg-green-700 text-white hover:bg-green-600"
                         }`}
                       >
                         <div className="whitespace-normal break-words text-center">{d.name}</div>

@@ -1279,74 +1279,75 @@ export default function DoctorPage() {
                           <div className="h-px flex-1 bg-emerald-500/60" />
                         </div>
                       ) : null}
-                      <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedDx((prev) => {
-                          if (prev.includes(d.no)) {
-                            if (d.no === 4) {
-                              setInfectionChoice("");
-                              setInfectionOtherText("");
-                            }
-                            return prev.filter((x) => x !== d.no);
-                          }
-                          if (prev.length >= 2) return [prev[1], d.no];
-                          return [...prev, d.no];
-                        });
-                      }}
-                      className={`rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight text-black shadow-sm transition ${spanClass} ${
-                        selected ? "border-emerald-600 bg-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)]" : "border-zinc-300 bg-white hover:border-emerald-500"
-                      }`}
-                    >
-                      <div className="whitespace-normal break-words text-center">{d.name}</div>
-                    </button>
+                      <div className={spanClass}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedDx((prev) => {
+                              if (prev.includes(d.no)) {
+                                if (d.no === 4) {
+                                  setInfectionChoice("");
+                                  setInfectionOtherText("");
+                                }
+                                return prev.filter((x) => x !== d.no);
+                              }
+                              if (prev.length >= 2) return [prev[1], d.no];
+                              return [...prev, d.no];
+                            });
+                          }}
+                          className={`w-full rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight text-black shadow-sm transition ${
+                            selected
+                              ? "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)]"
+                              : "border-zinc-300 bg-white hover:border-emerald-500"
+                          }`}
+                        >
+                          <div className="whitespace-normal break-words text-center">{d.name}</div>
+                        </button>
+                        {d.no === 4 && selected ? (
+                          <div className="mt-1 rounded-md border border-zinc-200 p-2 dark:border-zinc-800">
+                            <div className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300">Infection Disease Type</div>
+                            <div className="mt-1 grid grid-cols-2 gap-1">
+                              {[
+                                { id: "acute_viral_hepatitis", label: "Acute Viral Hepatitis" },
+                                { id: "mumps", label: "Mumps" },
+                                { id: "chicken_pox", label: "Chicken pox" },
+                                { id: "measles", label: "Measles" },
+                                { id: "menningits", label: "Menningits" },
+                                { id: "other", label: "Other" },
+                              ].map((opt) => {
+                                const selectedInfection = infectionChoice === (opt.id as InfectionChoice);
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() => setInfectionChoice(opt.id as InfectionChoice)}
+                                    className={`rounded-none border px-1.5 py-1 text-[10px] font-semibold ${
+                                      selectedInfection
+                                        ? "border-emerald-600 bg-emerald-600 text-white"
+                                        : "border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+                                    }`}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {infectionChoice === "other" ? (
+                              <input
+                                value={infectionOtherText}
+                                onChange={(e) => setInfectionOtherText(e.target.value)}
+                                placeholder="Write rare infection disease..."
+                                className="mt-1 w-full rounded-none border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+                              />
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
                     </Fragment>
                   );
                 })}
               </div>
             </div>
-
-            {selectedDx.includes(4) ? (
-              <div className="mt-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
-                <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                  Infection Disease Type
-                </div>
-                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {[
-                    { id: "acute_viral_hepatitis", label: "Acute Viral Hepatitis" },
-                    { id: "mumps", label: "Mumps" },
-                    { id: "chicken_pox", label: "Chicken pox" },
-                    { id: "measles", label: "Measles" },
-                    { id: "menningits", label: "Menningits" },
-                    { id: "other", label: "Other" },
-                  ].map((opt) => {
-                    const selected = infectionChoice === (opt.id as InfectionChoice);
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => setInfectionChoice(opt.id as InfectionChoice)}
-                        className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
-                          selected
-                            ? "border-slate-600 bg-slate-600 text-white"
-                            : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                {infectionChoice === "other" ? (
-                  <input
-                    value={infectionOtherText}
-                    onChange={(e) => setInfectionOtherText(e.target.value)}
-                    placeholder="Write rare infection disease..."
-                    className="mt-2 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
-                  />
-                ) : null}
-              </div>
-            ) : null}
 
             <div className="mt-3">
               <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Disposition</label>
@@ -1646,74 +1647,75 @@ export default function DoctorPage() {
                             <div className="h-px flex-1 bg-emerald-500/60" />
                           </div>
                         ) : null}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedDx((prev) => {
-                            if (prev.includes(d.no)) {
-                              if (d.no === 4) {
-                                setInfectionChoice("");
-                                setInfectionOtherText("");
+                      <div className={spanClass}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedDx((prev) => {
+                              if (prev.includes(d.no)) {
+                                if (d.no === 4) {
+                                  setInfectionChoice("");
+                                  setInfectionOtherText("");
+                                }
+                                return prev.filter((x) => x !== d.no);
                               }
-                              return prev.filter((x) => x !== d.no);
-                            }
-                            if (prev.length >= 2) return [prev[1], d.no];
-                            return [...prev, d.no];
-                          });
-                        }}
-                        className={`rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight text-black shadow-sm transition ${spanClass} ${
-                          selected ? "border-emerald-600 bg-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)]" : "border-zinc-300 bg-white hover:border-emerald-500"
-                        }`}
-                      >
-                        <div className="whitespace-normal break-words text-center">{d.name}</div>
-                      </button>
+                              if (prev.length >= 2) return [prev[1], d.no];
+                              return [...prev, d.no];
+                            });
+                          }}
+                          className={`w-full rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight text-black shadow-sm transition ${
+                            selected
+                              ? "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)]"
+                              : "border-zinc-300 bg-white hover:border-emerald-500"
+                          }`}
+                        >
+                          <div className="whitespace-normal break-words text-center">{d.name}</div>
+                        </button>
+                        {d.no === 4 && selected ? (
+                          <div className="mt-1 rounded-md border border-zinc-200 p-2 dark:border-zinc-800">
+                            <div className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300">Infection Disease Type</div>
+                            <div className="mt-1 grid grid-cols-2 gap-1">
+                              {[
+                                { id: "acute_viral_hepatitis", label: "Acute Viral Hepatitis" },
+                                { id: "mumps", label: "Mumps" },
+                                { id: "chicken_pox", label: "Chicken pox" },
+                                { id: "measles", label: "Measles" },
+                                { id: "menningits", label: "Menningits" },
+                                { id: "other", label: "Other" },
+                              ].map((opt) => {
+                                const selectedInfection = infectionChoice === (opt.id as InfectionChoice);
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() => setInfectionChoice(opt.id as InfectionChoice)}
+                                    className={`rounded-none border px-1.5 py-1 text-[10px] font-semibold ${
+                                      selectedInfection
+                                        ? "border-emerald-600 bg-emerald-600 text-white"
+                                        : "border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+                                    }`}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {infectionChoice === "other" ? (
+                              <input
+                                value={infectionOtherText}
+                                onChange={(e) => setInfectionOtherText(e.target.value)}
+                                placeholder="Write rare infection disease..."
+                                className="mt-1 w-full rounded-none border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+                              />
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
                       </Fragment>
                     );
                   })}
                 </div>
               </div>
-
-              {selectedDx.includes(4) ? (
-                <div className="mt-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
-                  <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                    Infection Disease Type
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {[
-                      { id: "acute_viral_hepatitis", label: "Acute Viral Hepatitis" },
-                      { id: "mumps", label: "Mumps" },
-                      { id: "chicken_pox", label: "Chicken pox" },
-                      { id: "measles", label: "Measles" },
-                      { id: "menningits", label: "Menningits" },
-                      { id: "other", label: "Other" },
-                    ].map((opt) => {
-                      const selected = infectionChoice === (opt.id as InfectionChoice);
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => setInfectionChoice(opt.id as InfectionChoice)}
-                          className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
-                            selected
-                              ? "border-slate-600 bg-slate-600 text-white"
-                              : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {infectionChoice === "other" ? (
-                    <input
-                      value={infectionOtherText}
-                      onChange={(e) => setInfectionOtherText(e.target.value)}
-                      placeholder="Write rare infection disease..."
-                      className="mt-2 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
-                    />
-                  ) : null}
-                </div>
-              ) : null}
 
               <div className="mt-3">
                 <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Disposition</div>

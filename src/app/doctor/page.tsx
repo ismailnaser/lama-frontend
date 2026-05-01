@@ -1266,9 +1266,10 @@ export default function DoctorPage() {
                   const isMedical = d.category === "Medical";
                   const surgicalIdx = idx - medicalDiagnosisCount;
                   const isLastTwoMedical = isMedical && idx >= medicalDiagnosisCount - 2;
-                  const isOddSurgicalFirst = !isMedical && surgicalDiagnosisCount % 2 === 1 && surgicalIdx === 0;
-                  const isBottomFourSurgical = !isMedical && surgicalDiagnosisCount >= 4 && surgicalIdx >= surgicalDiagnosisCount - 4;
-                  const spanClass = isOddSurgicalFirst ? "col-span-6" : isLastTwoMedical || isBottomFourSurgical ? "col-span-3" : "col-span-2";
+                  const isFirstThreeOfFiveSurgical = !isMedical && surgicalDiagnosisCount === 5 && surgicalIdx <= 2;
+                  const isLastTwoOfFiveSurgical = !isMedical && surgicalDiagnosisCount === 5 && surgicalIdx >= 3;
+                  const isBottomFourSurgical = !isMedical && surgicalDiagnosisCount >= 4 && surgicalDiagnosisCount !== 5 && surgicalIdx >= surgicalDiagnosisCount - 4;
+                  const spanClass = isLastTwoMedical || isLastTwoOfFiveSurgical || isBottomFourSurgical ? "col-span-3" : "col-span-2";
                   return (
                     <Fragment key={d.no}>
                       {idx === medicalDiagnosisCount ? (
@@ -1632,9 +1633,10 @@ export default function DoctorPage() {
                     const isMedical = d.category === "Medical";
                     const surgicalIdx = idx - medicalDiagnosisCount;
                     const isLastTwoMedical = isMedical && idx >= medicalDiagnosisCount - 2;
-                    const isOddSurgicalFirst = !isMedical && surgicalDiagnosisCount % 2 === 1 && surgicalIdx === 0;
-                    const isBottomFourSurgical = !isMedical && surgicalDiagnosisCount >= 4 && surgicalIdx >= surgicalDiagnosisCount - 4;
-                    const spanClass = isOddSurgicalFirst ? "col-span-6" : isLastTwoMedical || isBottomFourSurgical ? "col-span-3" : "col-span-2";
+                    const isFirstThreeOfFiveSurgical = !isMedical && surgicalDiagnosisCount === 5 && surgicalIdx <= 2;
+                    const isLastTwoOfFiveSurgical = !isMedical && surgicalDiagnosisCount === 5 && surgicalIdx >= 3;
+                    const isBottomFourSurgical = !isMedical && surgicalDiagnosisCount >= 4 && surgicalDiagnosisCount !== 5 && surgicalIdx >= surgicalDiagnosisCount - 4;
+                    const spanClass = isLastTwoMedical || isLastTwoOfFiveSurgical || isBottomFourSurgical ? "col-span-3" : "col-span-2";
                     return (
                       <Fragment key={d.no}>
                         {idx === medicalDiagnosisCount ? (

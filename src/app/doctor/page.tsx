@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { fetchCurrentUser, logout } from "@/lib/authApi";
 import { PwaClient } from "@/components/PwaClient";
@@ -638,7 +638,12 @@ export default function DoctorPage() {
         const ca = a.category === "Medical" ? 0 : 1;
         const cb = b.category === "Medical" ? 0 : 1;
         if (ca !== cb) return ca - cb;
-        return a.no - b.no;
+        // Keep Dental beside Musculoskeletal for better label fit on mobile
+        const displayNo = (d: { no: number; category: string }) => {
+          if (d.category === "Medical" && d.no === 22) return 10.5;
+          return d.no;
+        };
+        return displayNo(a) - displayNo(b);
       }),
     []
   );
@@ -1250,16 +1255,7 @@ export default function DoctorPage() {
 
             <div className="mt-3">
               <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-semibold">
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400 bg-emerald-700 px-2 py-0.5 text-white shadow-sm">
-                  <span className="h-2 w-2 rounded-full bg-emerald-200" />
-                  Medical
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-green-300 bg-green-800 px-2 py-0.5 text-white shadow-sm">
-                  <span className="h-2 w-2 rounded-full bg-green-200" />
-                  Surgical
-                </span>
-              </div>
+              <div className="mt-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">دوائي</div>
               <div className="mt-1 grid grid-cols-6 gap-1.5 sm:gap-2">
                 {orderedDiagnoses.map((d, idx) => {
                   const selected = selectedDx.includes(d.no);
@@ -1270,8 +1266,15 @@ export default function DoctorPage() {
                   const isBottomFourSurgical = !isMedical && surgicalDiagnosisCount >= 4 && surgicalIdx >= surgicalDiagnosisCount - 4;
                   const spanClass = isOddSurgicalFirst ? "col-span-6" : isLastTwoMedical || isBottomFourSurgical ? "col-span-3" : "col-span-2";
                   return (
-                    <button
-                      key={d.no}
+                    <Fragment key={d.no}>
+                      {idx === medicalDiagnosisCount ? (
+                        <div className="col-span-6 my-1 flex items-center gap-2">
+                          <div className="h-px flex-1 bg-emerald-500/60" />
+                          <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">جراحي</span>
+                          <div className="h-px flex-1 bg-emerald-500/60" />
+                        </div>
+                      ) : null}
+                      <button
                       type="button"
                       onClick={() => {
                         setSelectedDx((prev) => {
@@ -1286,18 +1289,13 @@ export default function DoctorPage() {
                           return [...prev, d.no];
                         });
                       }}
-                      className={`rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight shadow-sm transition ${spanClass} ${
-                        isMedical
-                          ? selected
-                            ? "border-emerald-500 bg-emerald-600 text-white shadow-[0_0_0_2px_rgba(16,185,129,0.28)]"
-                            : "border-zinc-300 bg-white text-black hover:border-emerald-500 hover:bg-emerald-50"
-                          : selected
-                            ? "border-zinc-300 bg-white text-black shadow-[0_0_0_2px_rgba(22,163,74,0.16)]"
-                            : "border-green-600 bg-green-700 text-white hover:bg-green-600"
+                      className={`rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight text-black shadow-sm transition ${spanClass} ${
+                        selected ? "border-emerald-600 bg-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)]" : "border-zinc-300 bg-white hover:border-emerald-500"
                       }`}
                     >
                       <div className="whitespace-normal break-words text-center">{d.name}</div>
                     </button>
+                    </Fragment>
                   );
                 })}
               </div>
@@ -1619,16 +1617,7 @@ export default function DoctorPage() {
 
               <div className="mt-3">
                 <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-semibold">
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400 bg-emerald-700 px-2 py-0.5 text-white shadow-sm">
-                    <span className="h-2 w-2 rounded-full bg-emerald-200" />
-                    Medical
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-green-300 bg-green-800 px-2 py-0.5 text-white shadow-sm">
-                    <span className="h-2 w-2 rounded-full bg-green-200" />
-                    Surgical
-                  </span>
-                </div>
+                <div className="mt-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">دوائي</div>
                 <div className="mt-1 grid grid-cols-6 gap-1.5 sm:gap-2">
                   {orderedDiagnoses.map((d, idx) => {
                     const selected = selectedDx.includes(d.no);
@@ -1639,8 +1628,15 @@ export default function DoctorPage() {
                     const isBottomFourSurgical = !isMedical && surgicalDiagnosisCount >= 4 && surgicalIdx >= surgicalDiagnosisCount - 4;
                     const spanClass = isOddSurgicalFirst ? "col-span-6" : isLastTwoMedical || isBottomFourSurgical ? "col-span-3" : "col-span-2";
                     return (
+                      <Fragment key={d.no}>
+                        {idx === medicalDiagnosisCount ? (
+                          <div className="col-span-6 my-1 flex items-center gap-2">
+                            <div className="h-px flex-1 bg-emerald-500/60" />
+                            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">جراحي</span>
+                            <div className="h-px flex-1 bg-emerald-500/60" />
+                          </div>
+                        ) : null}
                       <button
-                        key={d.no}
                         type="button"
                         onClick={() => {
                           setSelectedDx((prev) => {
@@ -1655,18 +1651,13 @@ export default function DoctorPage() {
                             return [...prev, d.no];
                           });
                         }}
-                        className={`rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight shadow-sm transition ${spanClass} ${
-                          isMedical
-                            ? selected
-                              ? "border-emerald-500 bg-emerald-600 text-white shadow-[0_0_0_2px_rgba(16,185,129,0.28)]"
-                              : "border-zinc-300 bg-white text-black hover:border-emerald-500 hover:bg-emerald-50"
-                            : selected
-                              ? "border-zinc-300 bg-white text-black shadow-[0_0_0_2px_rgba(22,163,74,0.16)]"
-                              : "border-green-600 bg-green-700 text-white hover:bg-green-600"
+                        className={`rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight text-black shadow-sm transition ${spanClass} ${
+                          selected ? "border-emerald-600 bg-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)]" : "border-zinc-300 bg-white hover:border-emerald-500"
                         }`}
                       >
                         <div className="whitespace-normal break-words text-center">{d.name}</div>
                       </button>
+                      </Fragment>
                     );
                   })}
                 </div>

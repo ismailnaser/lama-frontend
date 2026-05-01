@@ -642,6 +642,11 @@ export default function DoctorPage() {
       }),
     []
   );
+  const medicalDiagnosisCount = useMemo(
+    () => orderedDiagnoses.filter((d) => d.category === "Medical").length,
+    [orderedDiagnoses]
+  );
+  const surgicalDiagnosisCount = orderedDiagnoses.length - medicalDiagnosisCount;
   async function reloadAdminUsers() {
     if (!canManageDoctorUsers) return;
     setAdminLoading(true);
@@ -1245,15 +1250,25 @@ export default function DoctorPage() {
 
             <div className="mt-3">
               <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
-              <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] font-semibold">
-                <span className="text-orange-300">Medical</span>
-                <span className="text-pink-300">Surgical</span>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-semibold">
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400 bg-emerald-700 px-2 py-0.5 text-white shadow-sm">
+                  <span className="h-2 w-2 rounded-full bg-emerald-200" />
+                  Medical
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-green-300 bg-green-800 px-2 py-0.5 text-white shadow-sm">
+                  <span className="h-2 w-2 rounded-full bg-green-200" />
+                  Surgical
+                </span>
               </div>
-              <div className="mt-1 grid grid-cols-3 gap-1.5 sm:gap-2">
+              <div className="mt-1 grid grid-cols-6 gap-1.5 sm:gap-2">
                 {orderedDiagnoses.map((d, idx) => {
                   const selected = selectedDx.includes(d.no);
-                  const isLastSingleInRow =
-                    orderedDiagnoses.length % 3 === 1 && idx === orderedDiagnoses.length - 1;
+                  const isMedical = d.category === "Medical";
+                  const surgicalIdx = idx - medicalDiagnosisCount;
+                  const isLastTwoMedical = isMedical && idx >= medicalDiagnosisCount - 2;
+                  const isOddSurgicalFirst = !isMedical && surgicalDiagnosisCount % 2 === 1 && surgicalIdx === 0;
+                  const isBottomFourSurgical = !isMedical && surgicalDiagnosisCount >= 4 && surgicalIdx >= surgicalDiagnosisCount - 4;
+                  const spanClass = isOddSurgicalFirst ? "col-span-6" : isLastTwoMedical || isBottomFourSurgical ? "col-span-3" : "col-span-2";
                   return (
                     <button
                       key={d.no}
@@ -1271,16 +1286,14 @@ export default function DoctorPage() {
                           return [...prev, d.no];
                         });
                       }}
-                      className={`rounded-xl border px-2 py-1.5 text-[11px] font-semibold leading-tight text-white shadow-sm transition ${
-                        isLastSingleInRow ? "col-span-3" : ""
-                      } ${
-                        d.category === "Medical"
+                      className={`rounded-xl border px-2 py-1.5 text-[11px] font-semibold leading-tight text-white shadow-sm transition ${spanClass} ${
+                        isMedical
                           ? selected
-                            ? "border-orange-300 bg-orange-500 shadow-[0_0_0_2px_rgba(251,146,60,0.28)]"
-                            : "border-orange-500 bg-orange-700 hover:bg-orange-600"
+                            ? "border-emerald-300 bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.28)]"
+                            : "border-emerald-500 bg-emerald-700 hover:bg-emerald-600"
                           : selected
-                            ? "border-pink-300 bg-pink-500 shadow-[0_0_0_2px_rgba(244,114,182,0.28)]"
-                            : "border-pink-500 bg-pink-700 hover:bg-pink-600"
+                            ? "border-green-300 bg-green-500 shadow-[0_0_0_2px_rgba(34,197,94,0.28)]"
+                            : "border-green-500 bg-green-700 hover:bg-green-600"
                       }`}
                     >
                       <div className="whitespace-normal break-words text-center">{d.name}</div>
@@ -1606,15 +1619,25 @@ export default function DoctorPage() {
 
               <div className="mt-3">
                 <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
-                <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] font-semibold">
-                  <span className="text-orange-300">Medical</span>
-                  <span className="text-pink-300">Surgical</span>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-semibold">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400 bg-emerald-700 px-2 py-0.5 text-white shadow-sm">
+                    <span className="h-2 w-2 rounded-full bg-emerald-200" />
+                    Medical
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-green-300 bg-green-800 px-2 py-0.5 text-white shadow-sm">
+                    <span className="h-2 w-2 rounded-full bg-green-200" />
+                    Surgical
+                  </span>
                 </div>
-                <div className="mt-1 grid grid-cols-3 gap-1.5 sm:gap-2">
+                <div className="mt-1 grid grid-cols-6 gap-1.5 sm:gap-2">
                   {orderedDiagnoses.map((d, idx) => {
                     const selected = selectedDx.includes(d.no);
-                    const isLastSingleInRow =
-                      orderedDiagnoses.length % 3 === 1 && idx === orderedDiagnoses.length - 1;
+                    const isMedical = d.category === "Medical";
+                    const surgicalIdx = idx - medicalDiagnosisCount;
+                    const isLastTwoMedical = isMedical && idx >= medicalDiagnosisCount - 2;
+                    const isOddSurgicalFirst = !isMedical && surgicalDiagnosisCount % 2 === 1 && surgicalIdx === 0;
+                    const isBottomFourSurgical = !isMedical && surgicalDiagnosisCount >= 4 && surgicalIdx >= surgicalDiagnosisCount - 4;
+                    const spanClass = isOddSurgicalFirst ? "col-span-6" : isLastTwoMedical || isBottomFourSurgical ? "col-span-3" : "col-span-2";
                     return (
                       <button
                         key={d.no}
@@ -1632,16 +1655,14 @@ export default function DoctorPage() {
                             return [...prev, d.no];
                           });
                         }}
-                        className={`rounded-xl border px-2 py-1.5 text-[11px] font-semibold leading-tight text-white shadow-sm transition ${
-                          isLastSingleInRow ? "col-span-3" : ""
-                        } ${
-                          d.category === "Medical"
+                        className={`rounded-xl border px-2 py-1.5 text-[11px] font-semibold leading-tight text-white shadow-sm transition ${spanClass} ${
+                          isMedical
                             ? selected
-                              ? "border-orange-300 bg-orange-500 shadow-[0_0_0_2px_rgba(251,146,60,0.28)]"
-                              : "border-orange-500 bg-orange-700 hover:bg-orange-600"
+                              ? "border-emerald-300 bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.28)]"
+                              : "border-emerald-500 bg-emerald-700 hover:bg-emerald-600"
                             : selected
-                              ? "border-pink-300 bg-pink-500 shadow-[0_0_0_2px_rgba(244,114,182,0.28)]"
-                              : "border-pink-500 bg-pink-700 hover:bg-pink-600"
+                              ? "border-green-300 bg-green-500 shadow-[0_0_0_2px_rgba(34,197,94,0.28)]"
+                              : "border-green-500 bg-green-700 hover:bg-green-600"
                         }`}
                       >
                         <div className="whitespace-normal break-words text-center">{d.name}</div>

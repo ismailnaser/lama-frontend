@@ -1255,7 +1255,11 @@ export default function DoctorPage() {
 
             <div className="mt-3">
               <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
-              <div className="mt-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">دوائي</div>
+              <div className="mt-1 flex items-center gap-2">
+                <div className="h-px flex-1 bg-emerald-500/60" />
+                <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Medical</span>
+                <div className="h-px flex-1 bg-emerald-500/60" />
+              </div>
               <div className="mt-1 grid grid-cols-6 gap-1.5 sm:gap-2">
                 {orderedDiagnoses.map((d, idx) => {
                   const selected = selectedDx.includes(d.no);
@@ -1270,7 +1274,7 @@ export default function DoctorPage() {
                       {idx === medicalDiagnosisCount ? (
                         <div className="col-span-6 my-1 flex items-center gap-2">
                           <div className="h-px flex-1 bg-emerald-500/60" />
-                          <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">جراحي</span>
+                          <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Surgical</span>
                           <div className="h-px flex-1 bg-emerald-500/60" />
                         </div>
                       ) : null}
@@ -1617,7 +1621,11 @@ export default function DoctorPage() {
 
               <div className="mt-3">
                 <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
-                <div className="mt-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">دوائي</div>
+                <div className="mt-1 flex items-center gap-2">
+                  <div className="h-px flex-1 bg-emerald-500/60" />
+                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Medical</span>
+                  <div className="h-px flex-1 bg-emerald-500/60" />
+                </div>
                 <div className="mt-1 grid grid-cols-6 gap-1.5 sm:gap-2">
                   {orderedDiagnoses.map((d, idx) => {
                     const selected = selectedDx.includes(d.no);
@@ -1632,7 +1640,7 @@ export default function DoctorPage() {
                         {idx === medicalDiagnosisCount ? (
                           <div className="col-span-6 my-1 flex items-center gap-2">
                             <div className="h-px flex-1 bg-emerald-500/60" />
-                            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">جراحي</span>
+                            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Surgical</span>
                             <div className="h-px flex-1 bg-emerald-500/60" />
                           </div>
                         ) : null}

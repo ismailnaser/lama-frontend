@@ -1245,7 +1245,17 @@ export default function DoctorPage() {
 
             <div className="mt-3">
               <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
-              <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-medium">
+                <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/70 bg-blue-950/55 px-2 py-0.5 text-blue-100">
+                  <span className="h-2 w-2 rounded-full bg-blue-400" />
+                  Medical
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/70 bg-violet-950/55 px-2 py-0.5 text-violet-100">
+                  <span className="h-2 w-2 rounded-full bg-violet-400" />
+                  Surgical
+                </span>
+              </div>
+              <div className="mt-1 grid grid-cols-3 gap-1.5 sm:gap-2">
                 {orderedDiagnoses.map((d, idx) => {
                   const selected = selectedDx.includes(d.no);
                   return (
@@ -1265,20 +1275,17 @@ export default function DoctorPage() {
                           return [...prev, d.no];
                         });
                       }}
-                      className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
+                      className={`rounded-lg border px-2 py-1.5 text-[11px] font-semibold leading-tight transition ${
                         d.category === "Medical"
                           ? selected
-                            ? "border-blue-600 bg-blue-600 text-white"
-                            : "border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-100"
+                            ? "border-blue-500 bg-blue-600 text-white shadow-[0_0_0_1px_rgba(59,130,246,0.6)]"
+                            : "border-blue-500/70 bg-blue-950/55 text-blue-100 hover:bg-blue-900/65"
                           : selected
-                            ? "border-purple-600 bg-purple-600 text-white"
-                            : "border-purple-200 bg-purple-50 text-purple-900 dark:border-purple-900/40 dark:bg-purple-900/20 dark:text-purple-100"
+                            ? "border-violet-500 bg-violet-600 text-white shadow-[0_0_0_1px_rgba(168,85,247,0.6)]"
+                            : "border-violet-500/70 bg-violet-950/55 text-violet-100 hover:bg-violet-900/65"
                       }`}
                     >
                       <div>{idx + 1}. {d.name}</div>
-                      <div className={`mt-1 text-[10px] font-medium ${selected ? "text-white/90" : "text-current/80"}`}>
-                        {d.category}
-                      </div>
                     </button>
                   );
                 })}
@@ -1601,7 +1608,17 @@ export default function DoctorPage() {
 
               <div className="mt-3">
                 <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
-                <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-medium">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/70 bg-blue-950/55 px-2 py-0.5 text-blue-100">
+                    <span className="h-2 w-2 rounded-full bg-blue-400" />
+                    Medical
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/70 bg-violet-950/55 px-2 py-0.5 text-violet-100">
+                    <span className="h-2 w-2 rounded-full bg-violet-400" />
+                    Surgical
+                  </span>
+                </div>
+                <div className="mt-1 grid grid-cols-3 gap-1.5 sm:gap-2">
                   {orderedDiagnoses.map((d, idx) => {
                     const selected = selectedDx.includes(d.no);
                     return (
@@ -1621,20 +1638,17 @@ export default function DoctorPage() {
                             return [...prev, d.no];
                           });
                         }}
-                        className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
+                        className={`rounded-lg border px-2 py-1.5 text-[11px] font-semibold leading-tight transition ${
                           d.category === "Medical"
                             ? selected
-                              ? "border-blue-600 bg-blue-600 text-white"
-                              : "border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-100"
+                              ? "border-blue-500 bg-blue-600 text-white shadow-[0_0_0_1px_rgba(59,130,246,0.6)]"
+                              : "border-blue-500/70 bg-blue-950/55 text-blue-100 hover:bg-blue-900/65"
                             : selected
-                              ? "border-purple-600 bg-purple-600 text-white"
-                              : "border-purple-200 bg-purple-50 text-purple-900 dark:border-purple-900/40 dark:bg-purple-900/20 dark:text-purple-100"
+                              ? "border-violet-500 bg-violet-600 text-white shadow-[0_0_0_1px_rgba(168,85,247,0.6)]"
+                              : "border-violet-500/70 bg-violet-950/55 text-violet-100 hover:bg-violet-900/65"
                         }`}
                       >
                         <div>{idx + 1}. {d.name}</div>
-                        <div className={`mt-1 text-[10px] font-medium ${selected ? "text-white/90" : "text-current/80"}`}>
-                          {d.category}
-                        </div>
                       </button>
                     );
                   })}

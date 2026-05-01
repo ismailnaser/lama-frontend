@@ -1246,18 +1246,20 @@ export default function DoctorPage() {
             <div className="mt-3">
               <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-medium">
-                <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/70 bg-blue-950/55 px-2 py-0.5 text-blue-100">
-                  <span className="h-2 w-2 rounded-full bg-blue-400" />
+                <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/90 bg-slate-900 px-2 py-0.5 text-cyan-100">
+                  <span className="h-2 w-2 rounded-full bg-cyan-300" />
                   Medical
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/70 bg-violet-950/55 px-2 py-0.5 text-violet-100">
-                  <span className="h-2 w-2 rounded-full bg-violet-400" />
+                <span className="inline-flex items-center gap-1 rounded-full border border-fuchsia-300/90 bg-slate-900 px-2 py-0.5 text-fuchsia-100">
+                  <span className="h-2 w-2 rounded-full bg-fuchsia-300" />
                   Surgical
                 </span>
               </div>
               <div className="mt-1 grid grid-cols-3 gap-1.5 sm:gap-2">
                 {orderedDiagnoses.map((d, idx) => {
                   const selected = selectedDx.includes(d.no);
+                  const isLastSingleInRow =
+                    orderedDiagnoses.length % 3 === 1 && idx === orderedDiagnoses.length - 1;
                   return (
                     <button
                       key={d.no}
@@ -1276,16 +1278,18 @@ export default function DoctorPage() {
                         });
                       }}
                       className={`rounded-lg border px-2 py-1.5 text-[11px] font-semibold leading-tight transition ${
+                        isLastSingleInRow ? "col-span-3" : ""
+                      } ${
                         d.category === "Medical"
                           ? selected
-                            ? "border-blue-500 bg-blue-600 text-white shadow-[0_0_0_1px_rgba(59,130,246,0.6)]"
-                            : "border-blue-500/70 bg-blue-950/55 text-blue-100 hover:bg-blue-900/65"
+                            ? "border-cyan-300 bg-cyan-500 text-slate-950 shadow-[0_0_0_2px_rgba(34,211,238,0.65)]"
+                            : "border-cyan-300/90 bg-slate-900 text-cyan-100 hover:bg-cyan-900/35"
                           : selected
-                            ? "border-violet-500 bg-violet-600 text-white shadow-[0_0_0_1px_rgba(168,85,247,0.6)]"
-                            : "border-violet-500/70 bg-violet-950/55 text-violet-100 hover:bg-violet-900/65"
+                            ? "border-fuchsia-300 bg-fuchsia-500 text-slate-950 shadow-[0_0_0_2px_rgba(232,121,249,0.65)]"
+                            : "border-fuchsia-300/90 bg-slate-900 text-fuchsia-100 hover:bg-fuchsia-900/35"
                       }`}
                     >
-                      <div>{idx + 1}. {d.name}</div>
+                      <div className="whitespace-normal break-words text-center">{d.name}</div>
                     </button>
                   );
                 })}
@@ -1609,18 +1613,20 @@ export default function DoctorPage() {
               <div className="mt-3">
                 <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-medium">
-                  <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/70 bg-blue-950/55 px-2 py-0.5 text-blue-100">
-                    <span className="h-2 w-2 rounded-full bg-blue-400" />
+                  <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/90 bg-slate-900 px-2 py-0.5 text-cyan-100">
+                    <span className="h-2 w-2 rounded-full bg-cyan-300" />
                     Medical
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/70 bg-violet-950/55 px-2 py-0.5 text-violet-100">
-                    <span className="h-2 w-2 rounded-full bg-violet-400" />
+                  <span className="inline-flex items-center gap-1 rounded-full border border-fuchsia-300/90 bg-slate-900 px-2 py-0.5 text-fuchsia-100">
+                    <span className="h-2 w-2 rounded-full bg-fuchsia-300" />
                     Surgical
                   </span>
                 </div>
                 <div className="mt-1 grid grid-cols-3 gap-1.5 sm:gap-2">
                   {orderedDiagnoses.map((d, idx) => {
                     const selected = selectedDx.includes(d.no);
+                    const isLastSingleInRow =
+                      orderedDiagnoses.length % 3 === 1 && idx === orderedDiagnoses.length - 1;
                     return (
                       <button
                         key={d.no}
@@ -1639,16 +1645,18 @@ export default function DoctorPage() {
                           });
                         }}
                         className={`rounded-lg border px-2 py-1.5 text-[11px] font-semibold leading-tight transition ${
+                          isLastSingleInRow ? "col-span-3" : ""
+                        } ${
                           d.category === "Medical"
                             ? selected
-                              ? "border-blue-500 bg-blue-600 text-white shadow-[0_0_0_1px_rgba(59,130,246,0.6)]"
-                              : "border-blue-500/70 bg-blue-950/55 text-blue-100 hover:bg-blue-900/65"
+                              ? "border-cyan-300 bg-cyan-500 text-slate-950 shadow-[0_0_0_2px_rgba(34,211,238,0.65)]"
+                              : "border-cyan-300/90 bg-slate-900 text-cyan-100 hover:bg-cyan-900/35"
                             : selected
-                              ? "border-violet-500 bg-violet-600 text-white shadow-[0_0_0_1px_rgba(168,85,247,0.6)]"
-                              : "border-violet-500/70 bg-violet-950/55 text-violet-100 hover:bg-violet-900/65"
+                              ? "border-fuchsia-300 bg-fuchsia-500 text-slate-950 shadow-[0_0_0_2px_rgba(232,121,249,0.65)]"
+                              : "border-fuchsia-300/90 bg-slate-900 text-fuchsia-100 hover:bg-fuchsia-900/35"
                         }`}
                       >
-                        <div>{idx + 1}. {d.name}</div>
+                        <div className="whitespace-normal break-words text-center">{d.name}</div>
                       </button>
                     );
                   })}

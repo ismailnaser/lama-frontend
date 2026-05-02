@@ -1295,7 +1295,7 @@ export default function DoctorPage() {
                               return [...prev, d.no];
                             });
                           }}
-                          className={`flex h-28 w-full flex-col items-center justify-center gap-1 rounded-none border px-2 py-2.5 text-xs font-semibold leading-snug text-black shadow-sm transition dark:text-zinc-100 sm:h-32 sm:px-3 sm:text-sm ${
+                          className={`flex h-[6.25rem] w-full flex-col items-center justify-center gap-0.5 rounded-none border px-2 py-2 text-xs font-semibold leading-snug text-black shadow-sm transition dark:text-zinc-100 sm:h-28 sm:px-3 sm:py-2.5 sm:text-sm ${
                             selected
                               ? "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)] dark:border-emerald-400 dark:bg-emerald-500 dark:text-zinc-950"
                               : "border-zinc-300 bg-white hover:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-emerald-400 dark:hover:bg-zinc-800"
@@ -1672,7 +1672,7 @@ export default function DoctorPage() {
                               return [...prev, d.no];
                             });
                           }}
-                          className={`flex h-28 w-full flex-col items-center justify-center gap-1 rounded-none border px-2 py-2.5 text-xs font-semibold leading-snug text-black shadow-sm transition dark:text-zinc-100 sm:h-32 sm:px-3 sm:text-sm ${
+                          className={`flex h-[6.25rem] w-full flex-col items-center justify-center gap-0.5 rounded-none border px-2 py-2 text-xs font-semibold leading-snug text-black shadow-sm transition dark:text-zinc-100 sm:h-28 sm:px-3 sm:py-2.5 sm:text-sm ${
                             selected
                               ? "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)] dark:border-emerald-400 dark:bg-emerald-500 dark:text-zinc-950"
                               : "border-zinc-300 bg-white hover:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-emerald-400 dark:hover:bg-zinc-800"

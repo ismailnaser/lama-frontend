@@ -62,11 +62,11 @@ const DIAGNOSES = [
   { no: 15, name: "Musculoskeletal Diseases", category: "Medical" },
   { no: 16, name: "Other Medical Diseases", category: "Medical" },
   { no: 17, name: "Dental", category: "Medical" },
-  { no: 18, name: "Burn", category: "Surgical" },
-  { no: 19, name: "Gunshot Wound (GSW)", category: "Surgical" },
-  { no: 20, name: "Other Wound", category: "Surgical" },
-  { no: 21, name: "Other Surgical", category: "Surgical" },
-  { no: 22, name: "Fracture", category: "Surgical" },
+  { no: 18, name: "Fracture", category: "Surgical" },
+  { no: 19, name: "Burn", category: "Surgical" },
+  { no: 20, name: "Gunshot Wound (GSW)", category: "Surgical" },
+  { no: 21, name: "Other Wound", category: "Surgical" },
+  { no: 22, name: "Other Surgical", category: "Surgical" },
 ] as const;
 const DOCTOR_PENDING_KEY = "doctorPendingPatientCreates";
 const DATE_INPUT_CLASS =

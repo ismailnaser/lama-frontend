@@ -1260,7 +1260,7 @@ export default function DoctorPage() {
                 <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Medical</span>
                 <div className="h-px flex-1 bg-emerald-500/60" />
               </div>
-              <div className="mt-1 grid grid-cols-6 gap-1.5 sm:gap-2">
+              <div className="mt-1 grid grid-cols-6 gap-2 sm:gap-2.5">
                 {orderedDiagnoses.map((d, idx) => {
                   const selected = selectedDx.includes(d.no);
                   const isMedical = d.category === "Medical";
@@ -1295,7 +1295,7 @@ export default function DoctorPage() {
                               return [...prev, d.no];
                             });
                           }}
-                          className={`flex h-12 w-full items-center justify-center rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight text-black shadow-sm transition dark:text-zinc-100 ${
+                          className={`flex min-h-16 w-full items-center justify-center rounded-none border px-2.5 py-3 text-xs font-semibold leading-snug text-black shadow-sm transition dark:text-zinc-100 sm:min-h-[4.5rem] sm:px-3 sm:text-sm ${
                             selected
                               ? "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)] dark:border-emerald-400 dark:bg-emerald-500 dark:text-zinc-950"
                               : "border-zinc-300 bg-white hover:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-emerald-400 dark:hover:bg-zinc-800"
@@ -1628,7 +1628,7 @@ export default function DoctorPage() {
                   <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Medical</span>
                   <div className="h-px flex-1 bg-emerald-500/60" />
                 </div>
-                <div className="mt-1 grid grid-cols-6 gap-1.5 sm:gap-2">
+                <div className="mt-1 grid grid-cols-6 gap-2 sm:gap-2.5">
                   {orderedDiagnoses.map((d, idx) => {
                     const selected = selectedDx.includes(d.no);
                     const isMedical = d.category === "Medical";
@@ -1663,7 +1663,7 @@ export default function DoctorPage() {
                               return [...prev, d.no];
                             });
                           }}
-                          className={`flex h-12 w-full items-center justify-center rounded-none border px-2 py-1.5 text-[11px] font-semibold leading-tight text-black shadow-sm transition dark:text-zinc-100 ${
+                          className={`flex min-h-16 w-full items-center justify-center rounded-none border px-2.5 py-3 text-xs font-semibold leading-snug text-black shadow-sm transition dark:text-zinc-100 sm:min-h-[4.5rem] sm:px-3 sm:text-sm ${
                             selected
                               ? "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)] dark:border-emerald-400 dark:bg-emerald-500 dark:text-zinc-950"
                               : "border-zinc-300 bg-white hover:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-emerald-400 dark:hover:bg-zinc-800"

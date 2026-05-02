@@ -54,12 +54,12 @@ const DIAGNOSES = [
   { no: 7, name: "Skin Infection", category: "Medical" },
   { no: 8, name: "Other Skin Diseases", category: "Medical" },
   { no: 9, name: "Genitourinary Diseases", category: "Medical" },
-  { no: 10, name: "Musculoskeletal Diseases", category: "Medical" },
+  { no: 10, name: "ENT Diseases", category: "Medical" },
   { no: 11, name: "Hypertension", category: "Medical" },
   { no: 12, name: "Diabetes", category: "Medical" },
   { no: 13, name: "Epilepsy", category: "Medical" },
   { no: 14, name: "Eye Diseases", category: "Medical" },
-  { no: 15, name: "ENT Diseases", category: "Medical" },
+  { no: 15, name: "Musculoskeletal Diseases", category: "Medical" },
   { no: 16, name: "Other Medical Diseases", category: "Medical" },
   { no: 17, name: "Fracture", category: "Surgical" },
   { no: 18, name: "Burn", category: "Surgical" },
@@ -638,12 +638,7 @@ export default function DoctorPage() {
         const ca = a.category === "Medical" ? 0 : 1;
         const cb = b.category === "Medical" ? 0 : 1;
         if (ca !== cb) return ca - cb;
-        // Keep Dental beside Musculoskeletal for better label fit on mobile
-        const displayNo = (d: { no: number; category: string }) => {
-          if (d.category === "Medical" && d.no === 22) return 10.5;
-          return d.no;
-        };
-        return displayNo(a) - displayNo(b);
+        return a.no - b.no;
       }),
     []
   );
@@ -1295,7 +1290,7 @@ export default function DoctorPage() {
                               return [...prev, d.no];
                             });
                           }}
-                          className={`flex h-[6.25rem] w-full flex-col items-center justify-center gap-0.5 rounded-none border px-2 py-2 text-xs font-semibold leading-snug text-black shadow-sm transition dark:text-zinc-100 sm:h-28 sm:px-3 sm:py-2.5 sm:text-sm ${
+                          className={`flex h-[6.25rem] w-full flex-col items-center justify-center gap-0 rounded-none border px-2 py-2 text-xs font-semibold leading-snug text-black shadow-sm transition dark:text-zinc-100 sm:h-28 sm:px-3 sm:py-2.5 sm:text-sm ${
                             selected
                               ? "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)] dark:border-emerald-400 dark:bg-emerald-500 dark:text-zinc-950"
                               : "border-zinc-300 bg-white hover:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-emerald-400 dark:hover:bg-zinc-800"
@@ -1308,9 +1303,7 @@ export default function DoctorPage() {
                           >
                             {d.no}
                           </span>
-                          <div className="flex min-h-0 w-full flex-1 items-center justify-center">
-                            <span className="break-words text-center leading-snug">{d.name}</span>
-                          </div>
+                          <span className="max-w-full break-words text-center leading-tight">{d.name}</span>
                         </button>
                       </div>
                       {d.no === 4 && selected ? (
@@ -1672,7 +1665,7 @@ export default function DoctorPage() {
                               return [...prev, d.no];
                             });
                           }}
-                          className={`flex h-[6.25rem] w-full flex-col items-center justify-center gap-0.5 rounded-none border px-2 py-2 text-xs font-semibold leading-snug text-black shadow-sm transition dark:text-zinc-100 sm:h-28 sm:px-3 sm:py-2.5 sm:text-sm ${
+                          className={`flex h-[6.25rem] w-full flex-col items-center justify-center gap-0 rounded-none border px-2 py-2 text-xs font-semibold leading-snug text-black shadow-sm transition dark:text-zinc-100 sm:h-28 sm:px-3 sm:py-2.5 sm:text-sm ${
                             selected
                               ? "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)] dark:border-emerald-400 dark:bg-emerald-500 dark:text-zinc-950"
                               : "border-zinc-300 bg-white hover:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-emerald-400 dark:hover:bg-zinc-800"
@@ -1685,9 +1678,7 @@ export default function DoctorPage() {
                           >
                             {d.no}
                           </span>
-                          <div className="flex min-h-0 w-full flex-1 items-center justify-center">
-                            <span className="break-words text-center leading-snug">{d.name}</span>
-                          </div>
+                          <span className="max-w-full break-words text-center leading-tight">{d.name}</span>
                         </button>
                       </div>
                       {d.no === 4 && selected ? (

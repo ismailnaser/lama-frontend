@@ -733,7 +733,7 @@ export default function DoctorPage() {
             no,
             displayNo: idx + 1,
             baseLabel: "Acute Gastroenteritis",
-            abbrev: "AGE",
+            abbrev: null as string | null,
             ms,
             isAgeParent: true as const,
           };

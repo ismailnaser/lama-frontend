@@ -725,13 +725,13 @@ export default function DoctorPage() {
   }, [summaryRows]);
   const gridDiagnoses = useMemo(
     () =>
-      DIAGNOSIS_GRID_NOS.map((no) => {
+      DIAGNOSIS_GRID_NOS.map((no, idx) => {
         const d = DIAGNOSES.find((x) => x.no === no)!;
         const ms = d.category === "Medical" ? "(M)" : "(S)";
         if (no === AGE_PARENT_NO) {
           return {
             no,
-            pairedDxNo: 3 as const,
+            displayNo: idx + 1,
             baseLabel: "Acute Gastroenteritis",
             abbrev: "AGE",
             ms,
@@ -740,7 +740,7 @@ export default function DoctorPage() {
         }
         return {
           no,
-          pairedDxNo: null as null,
+          displayNo: idx + 1,
           baseLabel: d.name,
           abbrev: null as string | null,
           ms,
@@ -1429,17 +1429,7 @@ export default function DoctorPage() {
                               selected ? "text-white dark:text-zinc-950" : "text-emerald-600 dark:text-emerald-400"
                             }`}
                           >
-                            {d.pairedDxNo != null ? (
-                              <>
-                                {d.no}
-                                <span className={selected ? "text-emerald-100 dark:text-emerald-200" : "text-emerald-500 dark:text-emerald-500"}>
-                                  {" · "}
-                                </span>
-                                {d.pairedDxNo}
-                              </>
-                            ) : (
-                              d.no
-                            )}
+                            {d.displayNo}
                           </span>
                           <span className="max-w-full break-words text-center leading-tight">
                             {d.baseLabel}{" "}
@@ -1455,8 +1445,8 @@ export default function DoctorPage() {
                           <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">Acute gastroenteritis type</div>
                           <div className="mt-1 grid grid-cols-2 gap-1">
                             {[
-                              { id: "watery" as const, label: "2 — Acute watery diarrhea" },
-                              { id: "bloody" as const, label: "3 — Acute bloody diarrhea" },
+                              { id: "watery" as const, label: "Acute watery diarrhea" },
+                              { id: "bloody" as const, label: "Acute bloody diarrhea" },
                             ].map((opt) => {
                               const sel = ageSubtype === opt.id;
                               return (
@@ -1845,17 +1835,7 @@ export default function DoctorPage() {
                                 selected ? "text-white dark:text-zinc-950" : "text-emerald-600 dark:text-emerald-400"
                               }`}
                             >
-                              {d.pairedDxNo != null ? (
-                                <>
-                                  {d.no}
-                                  <span className={selected ? "text-emerald-100 dark:text-emerald-200" : "text-emerald-500 dark:text-emerald-500"}>
-                                    {" · "}
-                                  </span>
-                                  {d.pairedDxNo}
-                                </>
-                              ) : (
-                                d.no
-                              )}
+                              {d.displayNo}
                             </span>
                             <span className="max-w-full break-words text-center leading-tight">
                               {d.baseLabel}{" "}
@@ -1871,8 +1851,8 @@ export default function DoctorPage() {
                             <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">Acute gastroenteritis type</div>
                             <div className="mt-1 grid grid-cols-2 gap-1">
                               {[
-                                { id: "watery" as const, label: "2 — Acute watery diarrhea" },
-                                { id: "bloody" as const, label: "3 — Acute bloody diarrhea" },
+                                { id: "watery" as const, label: "Acute watery diarrhea" },
+                                { id: "bloody" as const, label: "Acute bloody diarrhea" },
                               ].map((opt) => {
                                 const sel = ageSubtype === opt.id;
                                 return (

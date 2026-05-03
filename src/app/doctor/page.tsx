@@ -29,6 +29,11 @@ type InfectionChoice =
   | "menningits"
   | "other";
 
+type AgeSubtype = "watery" | "bloody" | "";
+
+/** UI groups AGE under one tile; API / notes still use dx_no 2 or 3. */
+const AGE_PARENT_NO = 2;
+
 type PendingDoctorCreate = {
   id: string;
   payload: {
@@ -36,6 +41,7 @@ type PendingDoctorCreate = {
     sex: Sex;
     ageRange: AgeRange;
     selectedDx: number[];
+    ageSubtype?: AgeSubtype;
     infectionChoice: InfectionChoice | "";
     infectionOtherText: string;
     ww: boolean;
@@ -68,6 +74,51 @@ const DIAGNOSES = [
   { no: 21, name: "Other Wound", category: "Surgical" },
   { no: 22, name: "Other Surgical", category: "Surgical" },
 ] as const;
+
+const DIAGNOSIS_GRID_NOS = [
+  1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+] as const;
+
+function normalizeAgeInPayload(payload: PendingDoctorCreate["payload"]): PendingDoctorCreate["payload"] {
+  let selectedDx = [...payload.selectedDx];
+  let ageSubtype: AgeSubtype = payload.ageSubtype ?? "";
+  if (selectedDx.includes(3)) {
+    selectedDx = selectedDx.map((n) => (n === 3 ? AGE_PARENT_NO : n));
+    if (!ageSubtype) ageSubtype = "bloody";
+  }
+  if (selectedDx.includes(AGE_PARENT_NO) && !ageSubtype) {
+    ageSubtype = "watery";
+  }
+  return { ...payload, selectedDx, ageSubtype };
+}
+
+function resolveDxRow(selectedNo: number, ageSubtype: AgeSubtype): (typeof DIAGNOSES)[number] {
+  if (selectedNo === AGE_PARENT_NO) {
+    const no = ageSubtype === "bloody" ? 3 : 2;
+    return DIAGNOSES.find((x) => x.no === no)!;
+  }
+  return DIAGNOSES.find((x) => x.no === selectedNo)!;
+}
+
+function resolveSelectedDiagnosisRows(selectedDx: number[], ageSubtype: AgeSubtype): (typeof DIAGNOSES)[number][] {
+  return selectedDx.map((n) => resolveDxRow(n, ageSubtype));
+}
+
+function normalizeSelectedDxFromStored(dxNos: number[]): { selectedDx: number[]; ageSubtype: AgeSubtype } {
+  let selectedDx = [...dxNos];
+  let ageSubtype: AgeSubtype = "";
+  if (selectedDx.includes(3)) {
+    selectedDx = selectedDx.map((n) => (n === 3 ? AGE_PARENT_NO : n));
+    ageSubtype = "bloody";
+  } else if (selectedDx.includes(AGE_PARENT_NO)) {
+    ageSubtype = "watery";
+  }
+  if (selectedDx.length === 2 && selectedDx[0] === selectedDx[1]) {
+    selectedDx = [selectedDx[0]];
+  }
+  return { selectedDx, ageSubtype };
+}
+
 const DOCTOR_PENDING_KEY = "doctorPendingPatientCreates";
 const DATE_INPUT_CLASS =
   "min-w-[138px] rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium tabular-nums text-zinc-800 shadow-sm outline-none transition-colors [direction:ltr] text-left focus:border-slate-500 focus:ring-2 focus:ring-slate-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:[color-scheme:dark] dark:focus:border-slate-400 dark:focus:ring-slate-800";
@@ -237,6 +288,7 @@ export default function DoctorPage() {
   const [ageRange, setAgeRange] = useState<AgeRange | "">("");
   const [keypadTarget, setKeypadTarget] = useState<"patientId">("patientId");
   const [selectedDx, setSelectedDx] = useState<number[]>([]);
+  const [ageSubtype, setAgeSubtype] = useState<AgeSubtype>("");
   const [infectionChoice, setInfectionChoice] = useState<InfectionChoice | "">("");
   const [infectionOtherText, setInfectionOtherText] = useState("");
   const [ww, setWw] = useState(false);
@@ -265,6 +317,7 @@ export default function DoctorPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<"new" | "summary" | "tables">("new");
   const hasSelectedSurgical = selectedDx.some((no) => {
+    if (no === AGE_PARENT_NO) return false;
     const d = DIAGNOSES.find((x) => x.no === no);
     return d?.category === "Surgical";
   });
@@ -291,6 +344,7 @@ export default function DoctorPage() {
     setSex("");
     setAgeRange("");
     setSelectedDx([]);
+    setAgeSubtype("");
     setInfectionChoice("");
     setInfectionOtherText("");
     setWw(false);
@@ -419,6 +473,9 @@ export default function DoctorPage() {
     if (selectedSex !== "M" && selectedSex !== "F") throw new Error("Gender is required.");
     if (!Number.isFinite(ageNum)) throw new Error("Age range is required.");
     if (selectedDx.length === 0) throw new Error("Select at least one diagnosis.");
+    if (selectedDx.includes(AGE_PARENT_NO) && !ageSubtype) {
+      throw new Error("Please select acute gastroenteritis type (watery or bloody).");
+    }
     if (selectedDx.includes(4) && !infectionChoice) {
       throw new Error("Please select infection disease type.");
     }
@@ -426,7 +483,7 @@ export default function DoctorPage() {
       throw new Error("Please write the infection disease name in Other.");
     }
 
-    const selectedDiagItems = DIAGNOSES.filter((d) => selectedDx.includes(d.no));
+    const selectedDiagItems = resolveSelectedDiagnosisRows(selectedDx, ageSubtype);
     const infectionLabel = (() => {
       if (infectionChoice === "acute_viral_hepatitis") return "Acute Viral Hepatitis";
       if (infectionChoice === "mumps") return "Mumps";
@@ -436,8 +493,8 @@ export default function DoctorPage() {
       if (infectionChoice === "other") return `Other: ${infectionOtherText.trim()}`;
       return "";
     })();
-    const selectedDxNames = selectedDiagItems.map((d) =>
-      d.no === 4 && infectionLabel ? `Infections Disease (${infectionLabel})` : d.name
+    const selectedDxNames = selectedDiagItems.map((d, i) =>
+      selectedDx[i] === 4 && infectionLabel ? `Infections Disease (${infectionLabel})` : d.name
     );
     const selectedDxNos = selectedDiagItems.map((d) => d.no);
     const hasMedicalCategory = selectedDiagItems.some((d) => d.category === "Medical");
@@ -460,6 +517,7 @@ export default function DoctorPage() {
       sex: selectedSex,
       ageRange: ageRange as AgeRange,
       selectedDx: [...selectedDx],
+      ageSubtype,
       infectionChoice,
       infectionOtherText,
       ww,
@@ -469,36 +527,40 @@ export default function DoctorPage() {
   }
 
   function buildApiPayloadFromPendingPayload(payload: PendingDoctorCreate["payload"]) {
-    const id = payload.id_no.trim();
+    const payloadNorm = normalizeAgeInPayload(payload);
+    const id = payloadNorm.id_no.trim();
     const ageNum = (() => {
-      if (payload.ageRange === "lt5") return 4;
-      if (payload.ageRange === "5to14") return 10;
-      if (payload.ageRange === "15to17") return 16;
-      if (payload.ageRange === "gte18") return 18;
+      if (payloadNorm.ageRange === "lt5") return 4;
+      if (payloadNorm.ageRange === "5to14") return 10;
+      if (payloadNorm.ageRange === "15to17") return 16;
+      if (payloadNorm.ageRange === "gte18") return 18;
       return NaN;
     })();
     if (!id) throw new Error("Patient ID is required.");
     if (!Number.isFinite(ageNum)) throw new Error("Age range is required.");
-    if (payload.selectedDx.length === 0) throw new Error("Select at least one diagnosis.");
-    if (payload.selectedDx.includes(4) && !payload.infectionChoice) {
+    if (payloadNorm.selectedDx.length === 0) throw new Error("Select at least one diagnosis.");
+    if (payloadNorm.selectedDx.includes(AGE_PARENT_NO) && !payloadNorm.ageSubtype) {
+      throw new Error("Please select acute gastroenteritis type (watery or bloody).");
+    }
+    if (payloadNorm.selectedDx.includes(4) && !payloadNorm.infectionChoice) {
       throw new Error("Please select infection disease type.");
     }
-    if (payload.selectedDx.includes(4) && payload.infectionChoice === "other" && !payload.infectionOtherText.trim()) {
+    if (payloadNorm.selectedDx.includes(4) && payloadNorm.infectionChoice === "other" && !payloadNorm.infectionOtherText.trim()) {
       throw new Error("Please write the infection disease name in Other.");
     }
 
-    const selectedDiagItems = DIAGNOSES.filter((d) => payload.selectedDx.includes(d.no));
+    const selectedDiagItems = resolveSelectedDiagnosisRows(payloadNorm.selectedDx, payloadNorm.ageSubtype ?? "");
     const infectionLabel = (() => {
-      if (payload.infectionChoice === "acute_viral_hepatitis") return "Acute Viral Hepatitis";
-      if (payload.infectionChoice === "mumps") return "Mumps";
-      if (payload.infectionChoice === "chicken_pox") return "Chicken pox";
-      if (payload.infectionChoice === "measles") return "Measles";
-      if (payload.infectionChoice === "menningits") return "Menningits";
-      if (payload.infectionChoice === "other") return `Other: ${payload.infectionOtherText.trim()}`;
+      if (payloadNorm.infectionChoice === "acute_viral_hepatitis") return "Acute Viral Hepatitis";
+      if (payloadNorm.infectionChoice === "mumps") return "Mumps";
+      if (payloadNorm.infectionChoice === "chicken_pox") return "Chicken pox";
+      if (payloadNorm.infectionChoice === "measles") return "Measles";
+      if (payloadNorm.infectionChoice === "menningits") return "Menningits";
+      if (payloadNorm.infectionChoice === "other") return `Other: ${payloadNorm.infectionOtherText.trim()}`;
       return "";
     })();
-    const selectedDxNames = selectedDiagItems.map((d) =>
-      d.no === 4 && infectionLabel ? `Infections Disease (${infectionLabel})` : d.name
+    const selectedDxNames = selectedDiagItems.map((d, i) =>
+      payloadNorm.selectedDx[i] === 4 && infectionLabel ? `Infections Disease (${infectionLabel})` : d.name
     );
     const selectedDxNos = selectedDiagItems.map((d) => d.no);
     const hasMedicalCategory = selectedDiagItems.some((d) => d.category === "Medical");
@@ -507,13 +569,13 @@ export default function DoctorPage() {
       : selectedDiagItems.every((d) => d.category === "Surgical")
         ? "Surgical"
         : "Mixed";
-    const notes = [`dx_no:${selectedDxNos.join(",")}`, `dx:${selectedDxNames.join(",")}`, `cat:${categoryText}`, `disposition:${payload.disposition}`].join(" | ");
+    const notes = [`dx_no:${selectedDxNos.join(",")}`, `dx:${selectedDxNames.join(",")}`, `cat:${categoryText}`, `disposition:${payloadNorm.disposition}`].join(" | ");
     return {
       id_no: id,
-      sex: payload.sex,
+      sex: payloadNorm.sex,
       age: ageNum,
       room: hasMedicalCategory ? ("room2" as const) : ("room1" as const),
-      ww: payload.ww,
+      ww: payloadNorm.ww,
       notes,
     };
   }
@@ -632,21 +694,18 @@ export default function DoctorPage() {
     }));
     return { total, male, female, wwCount, nonWw, topDx, ageBreakdown };
   }, [summaryRows]);
-  const orderedDiagnoses = useMemo(
+  const gridDiagnoses = useMemo(
     () =>
-      [...DIAGNOSES].sort((a, b) => {
-        const ca = a.category === "Medical" ? 0 : 1;
-        const cb = b.category === "Medical" ? 0 : 1;
-        if (ca !== cb) return ca - cb;
-        return a.no - b.no;
+      DIAGNOSIS_GRID_NOS.map((no) => {
+        const d = DIAGNOSES.find((x) => x.no === no)!;
+        const ms = d.category === "Medical" ? "(M)" : "(S)";
+        if (no === AGE_PARENT_NO) {
+          return { no, baseLabel: "Acute Gastroenteritis", abbrev: "AGE", ms, isAgeParent: true as const };
+        }
+        return { no, baseLabel: d.name, abbrev: null as string | null, ms, isAgeParent: false as const };
       }),
     []
   );
-  const medicalDiagnosisCount = useMemo(
-    () => orderedDiagnoses.filter((d) => d.category === "Medical").length,
-    [orderedDiagnoses]
-  );
-  const surgicalDiagnosisCount = orderedDiagnoses.length - medicalDiagnosisCount;
   async function reloadAdminUsers() {
     if (!canManageDoctorUsers) return;
     setAdminLoading(true);
@@ -720,7 +779,9 @@ export default function DoctorPage() {
     setPatientId(row.id_no);
     setSex(row.sex);
     setAgeRange(ageToRange(row.age));
-    setSelectedDx(parsed.dxNo.slice(0, 2));
+    const ageNorm = normalizeSelectedDxFromStored(parsed.dxNo.slice(0, 2));
+    setSelectedDx(ageNorm.selectedDx);
+    setAgeSubtype(ageNorm.ageSubtype);
     setWw(Boolean(row.ww));
     const disp = parsed.disposition as Disposition;
     setDisposition(
@@ -765,6 +826,7 @@ export default function DoctorPage() {
           sex,
           ageRange: ageRange as AgeRange,
           selectedDx: [...selectedDx],
+          ageSubtype,
           infectionChoice,
           infectionOtherText,
           ww,
@@ -1250,31 +1312,12 @@ export default function DoctorPage() {
 
             <div className="mt-3">
               <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
-              <div className="mt-1 flex items-center gap-2">
-                <div className="h-px flex-1 bg-emerald-500/60" />
-                <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Medical</span>
-                <div className="h-px flex-1 bg-emerald-500/60" />
-              </div>
-              <div className="mt-1 grid grid-cols-6 gap-2 sm:gap-2.5">
-                {orderedDiagnoses.map((d, idx) => {
+              <div className="mt-1 grid grid-cols-3 gap-2 sm:gap-2.5">
+                {gridDiagnoses.map((d) => {
                   const selected = selectedDx.includes(d.no);
-                  const isMedical = d.category === "Medical";
-                  const surgicalIdx = idx - medicalDiagnosisCount;
-                  const isLastTwoMedical = isMedical && idx >= medicalDiagnosisCount - 2;
-                  const isFirstThreeOfFiveSurgical = !isMedical && surgicalDiagnosisCount === 5 && surgicalIdx <= 2;
-                  const isLastTwoOfFiveSurgical = !isMedical && surgicalDiagnosisCount === 5 && surgicalIdx >= 3;
-                  const isBottomFourSurgical = !isMedical && surgicalDiagnosisCount >= 4 && surgicalDiagnosisCount !== 5 && surgicalIdx >= surgicalDiagnosisCount - 4;
-                  const spanClass = isLastTwoMedical || isLastTwoOfFiveSurgical || isBottomFourSurgical ? "col-span-3" : "col-span-2";
                   return (
                     <Fragment key={d.no}>
-                      {idx === medicalDiagnosisCount ? (
-                        <div className="col-span-6 my-1 flex items-center gap-2">
-                          <div className="h-px flex-1 bg-emerald-500/60" />
-                          <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Surgical</span>
-                          <div className="h-px flex-1 bg-emerald-500/60" />
-                        </div>
-                      ) : null}
-                      <div className={spanClass}>
+                      <div>
                         <button
                           type="button"
                           onClick={() => {
@@ -1283,6 +1326,9 @@ export default function DoctorPage() {
                                 if (d.no === 4) {
                                   setInfectionChoice("");
                                   setInfectionOtherText("");
+                                }
+                                if (d.no === AGE_PARENT_NO) {
+                                  setAgeSubtype("");
                                 }
                                 return prev.filter((x) => x !== d.no);
                               }
@@ -1303,11 +1349,44 @@ export default function DoctorPage() {
                           >
                             {d.no}
                           </span>
-                          <span className="max-w-full break-words text-center leading-tight">{d.name}</span>
+                          <span className="max-w-full break-words text-center leading-tight">
+                            {d.baseLabel}{" "}
+                            <span className="whitespace-nowrap text-[10px] font-bold opacity-90 sm:text-[11px]">{d.ms}</span>
+                          </span>
+                          {d.abbrev ? (
+                            <span className="text-[10px] font-semibold leading-none opacity-80 sm:text-xs">({d.abbrev})</span>
+                          ) : null}
                         </button>
                       </div>
+                      {d.isAgeParent && selected ? (
+                        <div className="col-span-3 mt-1 rounded-md border border-emerald-500 p-2">
+                          <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">Acute gastroenteritis type</div>
+                          <div className="mt-1 grid grid-cols-2 gap-1">
+                            {[
+                              { id: "watery" as const, label: "Acute watery diarrhea" },
+                              { id: "bloody" as const, label: "Acute bloody diarrhea" },
+                            ].map((opt) => {
+                              const sel = ageSubtype === opt.id;
+                              return (
+                                <button
+                                  key={opt.id}
+                                  type="button"
+                                  onClick={() => setAgeSubtype(opt.id)}
+                                  className={`rounded-none border px-1.5 py-1.5 text-[10px] font-semibold sm:text-xs ${
+                                    sel
+                                      ? "border-emerald-600 bg-emerald-600 text-white"
+                                      : "border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+                                  }`}
+                                >
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
                       {d.no === 4 && selected ? (
-                        <div className="col-span-6 mt-1 rounded-md border border-emerald-500 p-2">
+                        <div className="col-span-3 mt-1 rounded-md border border-emerald-500 p-2">
                           <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">Infection Disease Type</div>
                           <div className="mt-1 grid grid-cols-2 gap-1 sm:grid-cols-3">
                             {[
@@ -1625,101 +1704,118 @@ export default function DoctorPage() {
 
               <div className="mt-3">
                 <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Diagnosis (up to 2)</div>
-                <div className="mt-1 flex items-center gap-2">
-                  <div className="h-px flex-1 bg-emerald-500/60" />
-                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Medical</span>
-                  <div className="h-px flex-1 bg-emerald-500/60" />
-                </div>
-                <div className="mt-1 grid grid-cols-6 gap-2 sm:gap-2.5">
-                  {orderedDiagnoses.map((d, idx) => {
+                <div className="mt-1 grid grid-cols-3 gap-2 sm:gap-2.5">
+                  {gridDiagnoses.map((d) => {
                     const selected = selectedDx.includes(d.no);
-                    const isMedical = d.category === "Medical";
-                    const surgicalIdx = idx - medicalDiagnosisCount;
-                    const isLastTwoMedical = isMedical && idx >= medicalDiagnosisCount - 2;
-                    const isFirstThreeOfFiveSurgical = !isMedical && surgicalDiagnosisCount === 5 && surgicalIdx <= 2;
-                    const isLastTwoOfFiveSurgical = !isMedical && surgicalDiagnosisCount === 5 && surgicalIdx >= 3;
-                    const isBottomFourSurgical = !isMedical && surgicalDiagnosisCount >= 4 && surgicalDiagnosisCount !== 5 && surgicalIdx >= surgicalDiagnosisCount - 4;
-                    const spanClass = isLastTwoMedical || isLastTwoOfFiveSurgical || isBottomFourSurgical ? "col-span-3" : "col-span-2";
                     return (
                       <Fragment key={d.no}>
-                        {idx === medicalDiagnosisCount ? (
-                          <div className="col-span-6 my-1 flex items-center gap-2">
-                            <div className="h-px flex-1 bg-emerald-500/60" />
-                            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Surgical</span>
-                            <div className="h-px flex-1 bg-emerald-500/60" />
-                          </div>
-                        ) : null}
-                      <div className={spanClass}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedDx((prev) => {
-                              if (prev.includes(d.no)) {
-                                if (d.no === 4) {
-                                  setInfectionChoice("");
-                                  setInfectionOtherText("");
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedDx((prev) => {
+                                if (prev.includes(d.no)) {
+                                  if (d.no === 4) {
+                                    setInfectionChoice("");
+                                    setInfectionOtherText("");
+                                  }
+                                  if (d.no === AGE_PARENT_NO) {
+                                    setAgeSubtype("");
+                                  }
+                                  return prev.filter((x) => x !== d.no);
                                 }
-                                return prev.filter((x) => x !== d.no);
-                              }
-                              if (prev.length >= 2) return [prev[1], d.no];
-                              return [...prev, d.no];
-                            });
-                          }}
-                          className={`flex h-[6.25rem] w-full flex-col items-center justify-center gap-0 rounded-none border px-2 py-2 text-xs font-semibold leading-snug text-black shadow-sm transition dark:text-zinc-100 sm:h-28 sm:px-3 sm:py-2.5 sm:text-sm ${
-                            selected
-                              ? "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)] dark:border-emerald-400 dark:bg-emerald-500 dark:text-zinc-950"
-                              : "border-zinc-300 bg-white hover:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-emerald-400 dark:hover:bg-zinc-800"
-                          }`}
-                        >
-                          <span
-                            className={`shrink-0 tabular-nums text-[11px] font-bold leading-none sm:text-xs ${
-                              selected ? "opacity-90" : "text-emerald-600 dark:text-emerald-400"
+                                if (prev.length >= 2) return [prev[1], d.no];
+                                return [...prev, d.no];
+                              });
+                            }}
+                            className={`flex h-[6.25rem] w-full flex-col items-center justify-center gap-0 rounded-none border px-2 py-2 text-xs font-semibold leading-snug text-black shadow-sm transition dark:text-zinc-100 sm:h-28 sm:px-3 sm:py-2.5 sm:text-sm ${
+                              selected
+                                ? "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_1px_rgba(5,150,105,0.45)] dark:border-emerald-400 dark:bg-emerald-500 dark:text-zinc-950"
+                                : "border-zinc-300 bg-white hover:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-emerald-400 dark:hover:bg-zinc-800"
                             }`}
                           >
-                            {d.no}
-                          </span>
-                          <span className="max-w-full break-words text-center leading-tight">{d.name}</span>
-                        </button>
-                      </div>
-                      {d.no === 4 && selected ? (
-                        <div className="col-span-6 mt-1 rounded-md border border-emerald-500 p-2">
-                          <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">Infection Disease Type</div>
-                          <div className="mt-1 grid grid-cols-2 gap-1 sm:grid-cols-3">
-                            {[
-                              { id: "acute_viral_hepatitis", label: "Acute Viral Hepatitis" },
-                              { id: "mumps", label: "Mumps" },
-                              { id: "chicken_pox", label: "Chicken pox" },
-                              { id: "measles", label: "Measles" },
-                              { id: "menningits", label: "Menningits" },
-                              { id: "other", label: "Other" },
-                            ].map((opt) => {
-                              const selectedInfection = infectionChoice === (opt.id as InfectionChoice);
-                              return (
-                                <button
-                                  key={opt.id}
-                                  type="button"
-                                  onClick={() => setInfectionChoice(opt.id as InfectionChoice)}
-                                  className={`rounded-none border px-1.5 py-1 text-[10px] font-semibold ${
-                                    selectedInfection
-                                      ? "border-emerald-600 bg-emerald-600 text-white"
-                                      : "border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
-                                  }`}
-                                >
-                                  {opt.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          {infectionChoice === "other" ? (
-                            <input
-                              value={infectionOtherText}
-                              onChange={(e) => setInfectionOtherText(e.target.value)}
-                              placeholder="Write rare infection disease..."
-                              className="mt-1 w-full rounded-none border border-emerald-400 bg-white px-2 py-1 text-xs dark:border-emerald-600 dark:bg-zinc-950"
-                            />
-                          ) : null}
+                            <span
+                              className={`shrink-0 tabular-nums text-[11px] font-bold leading-none sm:text-xs ${
+                                selected ? "opacity-90" : "text-emerald-600 dark:text-emerald-400"
+                              }`}
+                            >
+                              {d.no}
+                            </span>
+                            <span className="max-w-full break-words text-center leading-tight">
+                              {d.baseLabel}{" "}
+                              <span className="whitespace-nowrap text-[10px] font-bold opacity-90 sm:text-[11px]">{d.ms}</span>
+                            </span>
+                            {d.abbrev ? (
+                              <span className="text-[10px] font-semibold leading-none opacity-80 sm:text-xs">({d.abbrev})</span>
+                            ) : null}
+                          </button>
                         </div>
-                      ) : null}
+                        {d.isAgeParent && selected ? (
+                          <div className="col-span-3 mt-1 rounded-md border border-emerald-500 p-2">
+                            <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">Acute gastroenteritis type</div>
+                            <div className="mt-1 grid grid-cols-2 gap-1">
+                              {[
+                                { id: "watery" as const, label: "Acute watery diarrhea" },
+                                { id: "bloody" as const, label: "Acute bloody diarrhea" },
+                              ].map((opt) => {
+                                const sel = ageSubtype === opt.id;
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() => setAgeSubtype(opt.id)}
+                                    className={`rounded-none border px-1.5 py-1.5 text-[10px] font-semibold sm:text-xs ${
+                                      sel
+                                        ? "border-emerald-600 bg-emerald-600 text-white"
+                                        : "border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+                                    }`}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+                        {d.no === 4 && selected ? (
+                          <div className="col-span-3 mt-1 rounded-md border border-emerald-500 p-2">
+                            <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">Infection Disease Type</div>
+                            <div className="mt-1 grid grid-cols-2 gap-1 sm:grid-cols-3">
+                              {[
+                                { id: "acute_viral_hepatitis", label: "Acute Viral Hepatitis" },
+                                { id: "mumps", label: "Mumps" },
+                                { id: "chicken_pox", label: "Chicken pox" },
+                                { id: "measles", label: "Measles" },
+                                { id: "menningits", label: "Menningits" },
+                                { id: "other", label: "Other" },
+                              ].map((opt) => {
+                                const selectedInfection = infectionChoice === (opt.id as InfectionChoice);
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() => setInfectionChoice(opt.id as InfectionChoice)}
+                                    className={`rounded-none border px-1.5 py-1 text-[10px] font-semibold ${
+                                      selectedInfection
+                                        ? "border-emerald-600 bg-emerald-600 text-white"
+                                        : "border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+                                    }`}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {infectionChoice === "other" ? (
+                              <input
+                                value={infectionOtherText}
+                                onChange={(e) => setInfectionOtherText(e.target.value)}
+                                placeholder="Write rare infection disease..."
+                                className="mt-1 w-full rounded-none border border-emerald-400 bg-white px-2 py-1 text-xs dark:border-emerald-600 dark:bg-zinc-950"
+                              />
+                            ) : null}
+                          </div>
+                        ) : null}
                       </Fragment>
                     );
                   })}
@@ -2113,14 +2209,16 @@ export default function DoctorPage() {
                               onClick={() => {
                                 setEditingPatientId(null);
                                 setEditingPendingId(it.id);
-                                setPatientId(it.payload.id_no);
-                                setSex(it.payload.sex);
-                                setAgeRange(it.payload.ageRange);
-                                setSelectedDx(it.payload.selectedDx);
-                                setInfectionChoice(it.payload.infectionChoice);
-                                setInfectionOtherText(it.payload.infectionOtherText);
-                                setWw(it.payload.ww);
-                                setDisposition(it.payload.disposition);
+                                const p = normalizeAgeInPayload(it.payload);
+                                setPatientId(p.id_no);
+                                setSex(p.sex);
+                                setAgeRange(p.ageRange);
+                                setSelectedDx(p.selectedDx);
+                                setAgeSubtype(p.ageSubtype ?? "");
+                                setInfectionChoice(p.infectionChoice);
+                                setInfectionOtherText(p.infectionOtherText);
+                                setWw(p.ww);
+                                setDisposition(p.disposition);
                                 setPendingOpen(false);
                                 setEditModalOpen(true);
                               }}

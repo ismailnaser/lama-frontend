@@ -580,7 +580,7 @@ export default function DoctorPage() {
     };
   }
 
-  async function flushPendingCreates() {
+  async function flushPendingCreates(opts?: { quiet?: boolean }) {
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
     const items = readDoctorPending();
     if (items.length === 0) return;
@@ -597,9 +597,17 @@ export default function DoctorPage() {
     setPendingCount(remaining.length);
     setPendingItems(remaining);
     if (remaining.length !== items.length) {
-      setToast("Pending doctor patients synced.");
       await refreshToday();
+      if (!opts?.quiet) {
+        setToast("Pending doctor patients synced.");
+      }
     }
+  }
+
+  /** After queuing locally: upload in background when online so the doctor does not wait on Sync. */
+  function autoSyncPendingInBackground() {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    void flushPendingCreates({ quiet: true });
   }
 
   function openPending() {
@@ -624,6 +632,27 @@ export default function DoctorPage() {
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
   }, []);
+
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState !== "visible") return;
+      if (typeof navigator !== "undefined" && navigator.onLine && readDoctorPending().length > 0) {
+        void flushPendingCreates({ quiet: true });
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  useEffect(() => {
+    if (!authReady || !authUser) return;
+    const id = window.setInterval(() => {
+      if (typeof navigator !== "undefined" && navigator.onLine && readDoctorPending().length > 0) {
+        void flushPendingCreates({ quiet: true });
+      }
+    }, 45_000);
+    return () => window.clearInterval(id);
+  }, [authReady, authUser]);
 
   useEffect(() => {
     if (!authReady || !authUser || activeSection !== "tables") return;
@@ -700,9 +729,23 @@ export default function DoctorPage() {
         const d = DIAGNOSES.find((x) => x.no === no)!;
         const ms = d.category === "Medical" ? "(M)" : "(S)";
         if (no === AGE_PARENT_NO) {
-          return { no, baseLabel: "Acute Gastroenteritis", abbrev: "AGE", ms, isAgeParent: true as const };
+          return {
+            no,
+            pairedDxNo: 3 as const,
+            baseLabel: "Acute Gastroenteritis",
+            abbrev: "AGE",
+            ms,
+            isAgeParent: true as const,
+          };
         }
-        return { no, baseLabel: d.name, abbrev: null as string | null, ms, isAgeParent: false as const };
+        return {
+          no,
+          pairedDxNo: null as null,
+          baseLabel: d.name,
+          abbrev: null as string | null,
+          ms,
+          isAgeParent: false as const,
+        };
       }),
     []
   );
@@ -717,6 +760,37 @@ export default function DoctorPage() {
       setAdminError(e instanceof Error ? e.message : "Failed to load users.");
     } finally {
       setAdminLoading(false);
+    }
+  }
+
+  /** New cases only: store in local Pending immediately (no network). Use when the connection is slow or unreliable. */
+  function queueNewPatientToPending() {
+    scrollToTop();
+    setError(null);
+    if (editingPatientId) {
+      setError("Pending is for new patients only. Use Update to save this record.");
+      requestAnimationFrame(scrollToTop);
+      return;
+    }
+    try {
+      const { pendingPayload } = buildDoctorPayloadFromForm();
+      const next: PendingDoctorCreate[] = [
+        ...readDoctorPending(),
+        { id: crypto.randomUUID(), payload: pendingPayload, created_at: new Date().toISOString() },
+      ];
+      writeDoctorPending(next);
+      setPendingCount(next.length);
+      resetForm();
+      if (typeof navigator !== "undefined" && navigator.onLine) {
+        setToast("Saved locally — uploading in the background. You can continue with the next patient.");
+        autoSyncPendingInBackground();
+      } else {
+        setToast("Saved to Pending. Will upload automatically when you're online.");
+      }
+      requestAnimationFrame(scrollToTop);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add to Pending.");
+      requestAnimationFrame(scrollToTop);
     }
   }
 
@@ -738,7 +812,7 @@ export default function DoctorPage() {
           writeDoctorPending(next);
           setPendingCount(next.length);
           resetForm();
-          setToast("Saved offline. Check Pending.");
+          setToast("Saved offline. Will upload automatically when you're online.");
           requestAnimationFrame(scrollToTop);
           return;
         }
@@ -759,7 +833,12 @@ export default function DoctorPage() {
           writeDoctorPending(next);
           setPendingCount(next.length);
           resetForm();
-          setToast("Saved offline. Check Pending.");
+          if (typeof navigator !== "undefined" && navigator.onLine) {
+            setToast("Could not reach server — saved locally. Retrying upload in the background.");
+            autoSyncPendingInBackground();
+          } else {
+            setToast("Saved offline. Will upload automatically when you're online.");
+          }
           requestAnimationFrame(scrollToTop);
           return;
         } catch {
@@ -1315,6 +1394,9 @@ export default function DoctorPage() {
               <div className="mt-1 grid grid-cols-3 gap-2 sm:gap-2.5">
                 {gridDiagnoses.map((d) => {
                   const selected = selectedDx.includes(d.no);
+                  const msClass = selected
+                    ? "font-extrabold text-emerald-50 dark:text-emerald-100"
+                    : "font-extrabold text-emerald-600 dark:text-emerald-400";
                   return (
                     <Fragment key={d.no}>
                       <div>
@@ -1344,14 +1426,24 @@ export default function DoctorPage() {
                         >
                           <span
                             className={`shrink-0 tabular-nums text-[11px] font-bold leading-none sm:text-xs ${
-                              selected ? "opacity-90" : "text-emerald-600 dark:text-emerald-400"
+                              selected ? "text-white dark:text-zinc-950" : "text-emerald-600 dark:text-emerald-400"
                             }`}
                           >
-                            {d.no}
+                            {d.pairedDxNo != null ? (
+                              <>
+                                {d.no}
+                                <span className={selected ? "text-emerald-100 dark:text-emerald-200" : "text-emerald-500 dark:text-emerald-500"}>
+                                  {" · "}
+                                </span>
+                                {d.pairedDxNo}
+                              </>
+                            ) : (
+                              d.no
+                            )}
                           </span>
                           <span className="max-w-full break-words text-center leading-tight">
                             {d.baseLabel}{" "}
-                            <span className="whitespace-nowrap text-[10px] font-bold opacity-90 sm:text-[11px]">{d.ms}</span>
+                            <span className={`whitespace-nowrap text-[10px] sm:text-[11px] ${msClass}`}>{d.ms}</span>
                           </span>
                           {d.abbrev ? (
                             <span className="text-[10px] font-semibold leading-none opacity-80 sm:text-xs">({d.abbrev})</span>
@@ -1363,8 +1455,8 @@ export default function DoctorPage() {
                           <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">Acute gastroenteritis type</div>
                           <div className="mt-1 grid grid-cols-2 gap-1">
                             {[
-                              { id: "watery" as const, label: "Acute watery diarrhea" },
-                              { id: "bloody" as const, label: "Acute bloody diarrhea" },
+                              { id: "watery" as const, label: "2 — Acute watery diarrhea" },
+                              { id: "bloody" as const, label: "3 — Acute bloody diarrhea" },
                             ].map((opt) => {
                               const sel = ageSubtype === opt.id;
                               return (
@@ -1470,10 +1562,21 @@ export default function DoctorPage() {
               <div />
             </div>
 
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               <button disabled={saving} type="submit" className="cursor-pointer rounded-xl bg-slate-600 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60">
                 {saving ? "Saving..." : editingPatientId ? "Update" : "Save & New"}
               </button>
+              {!editingPatientId ? (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={queueNewPatientToPending}
+                  title="Saves instantly on this device. Does not use the network. Open Pending and tap Sync when online."
+                  className="cursor-pointer rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-60 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-900/50"
+                >
+                  Save to Pending
+                </button>
+              ) : null}
               {editingPatientId ? (
                 <button
                   type="button"
@@ -1707,6 +1810,9 @@ export default function DoctorPage() {
                 <div className="mt-1 grid grid-cols-3 gap-2 sm:gap-2.5">
                   {gridDiagnoses.map((d) => {
                     const selected = selectedDx.includes(d.no);
+                    const msClass = selected
+                      ? "font-extrabold text-emerald-50 dark:text-emerald-100"
+                      : "font-extrabold text-emerald-600 dark:text-emerald-400";
                     return (
                       <Fragment key={d.no}>
                         <div>
@@ -1736,14 +1842,24 @@ export default function DoctorPage() {
                           >
                             <span
                               className={`shrink-0 tabular-nums text-[11px] font-bold leading-none sm:text-xs ${
-                                selected ? "opacity-90" : "text-emerald-600 dark:text-emerald-400"
+                                selected ? "text-white dark:text-zinc-950" : "text-emerald-600 dark:text-emerald-400"
                               }`}
                             >
-                              {d.no}
+                              {d.pairedDxNo != null ? (
+                                <>
+                                  {d.no}
+                                  <span className={selected ? "text-emerald-100 dark:text-emerald-200" : "text-emerald-500 dark:text-emerald-500"}>
+                                    {" · "}
+                                  </span>
+                                  {d.pairedDxNo}
+                                </>
+                              ) : (
+                                d.no
+                              )}
                             </span>
                             <span className="max-w-full break-words text-center leading-tight">
                               {d.baseLabel}{" "}
-                              <span className="whitespace-nowrap text-[10px] font-bold opacity-90 sm:text-[11px]">{d.ms}</span>
+                              <span className={`whitespace-nowrap text-[10px] sm:text-[11px] ${msClass}`}>{d.ms}</span>
                             </span>
                             {d.abbrev ? (
                               <span className="text-[10px] font-semibold leading-none opacity-80 sm:text-xs">({d.abbrev})</span>
@@ -1755,8 +1871,8 @@ export default function DoctorPage() {
                             <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">Acute gastroenteritis type</div>
                             <div className="mt-1 grid grid-cols-2 gap-1">
                               {[
-                                { id: "watery" as const, label: "Acute watery diarrhea" },
-                                { id: "bloody" as const, label: "Acute bloody diarrhea" },
+                                { id: "watery" as const, label: "2 — Acute watery diarrhea" },
+                                { id: "bloody" as const, label: "3 — Acute bloody diarrhea" },
                               ].map((opt) => {
                                 const sel = ageSubtype === opt.id;
                                 return (
